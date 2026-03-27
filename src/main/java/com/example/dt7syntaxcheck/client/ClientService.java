@@ -2,10 +2,10 @@ package com.example.dt7syntaxcheck.client;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.net.Socket;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.io.IOException;
+import java.net.Socket;
 
 // class này xử lý kết nối và giao tiếp với server socket
 // bằng cách tạo các thread (worker) để xử lý mà không blocking UI(EDT thread)
@@ -15,9 +15,9 @@ public class ClientService {
     private BufferedReader in;
     private BufferedWriter out;
 
-    private MessageListener listener;
+    private CryptoManager listener;
 
-    public ClientService(MessageListener listener) {
+    public ClientService(CryptoManager listener) {
         this.listener = listener;
     }
 

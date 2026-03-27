@@ -18,7 +18,7 @@ public class ClientUIFrame extends javax.swing.JFrame {
         initComponents();
 
         // set up callback
-        clientService = new ClientService(new MessageListener() {
+        clientService = new ClientService(new CryptoManager() {
             @Override
             public void onMessageReceived(String message) {
                 pnlErrorLog.setText(pnlErrorLog.getText() + "\n" + message);

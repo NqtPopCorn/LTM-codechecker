@@ -1,6 +1,6 @@
 package com.example.dt7syntaxcheck.client;
 
-public interface MessageListener {
+public interface CryptoManager {
     void onMessageReceived(String message);
 
     void onDisconnected();

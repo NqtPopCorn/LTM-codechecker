@@ -1,5 +1,5 @@
 package com.example.dt7syntaxcheck.server;
 
-public class ServerMain {
+public class ClientHandler {
     
 }

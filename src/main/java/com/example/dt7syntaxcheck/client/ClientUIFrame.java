@@ -85,12 +85,10 @@ public class ClientUIFrame extends JFrame {
         JPanel controlsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         controlsPanel.add(new JLabel("Ngôn ngữ:"));
         
-        // Danh sách 5 ngôn ngữ hỗ trợ
         String[] languages = {"Python", "Java", "C++", "JavaScript", "C#"};
         cbLanguage = new JComboBox<>(languages);
         controlsPanel.add(cbLanguage);
 
-        // Nút Upload File
         btnUpload = new JButton("Upload File");
         btnUpload.addActionListener(this::btnUploadActionPerformed);
         controlsPanel.add(btnUpload);
@@ -99,56 +97,70 @@ public class ClientUIFrame extends JFrame {
         add(topPanel, BorderLayout.NORTH);
 
         // ==========================================
-        // 2. CENTER PANEL: Chứa vùng nhập code và vùng hiển thị kết quả
+        // 2. MAIN PANEL: Chứa 3 vùng chính
         // ==========================================
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        splitPane.setResizeWeight(0.6); // Chia tỷ lệ: 60% màn hình trên cho input, 40% dưới cho output
-
-        // 2.1 Code Input Area
+        
+        // 2.1 Code Input Area (Bên trái)
         JPanel inputPanel = new JPanel(new BorderLayout());
         inputPanel.setBorder(BorderFactory.createTitledBorder("Nhập mã nguồn (Source Code)"));
         txtCodeInput = new JTextArea();
-        txtCodeInput.setFont(new Font("Consolas", Font.PLAIN, 15)); // Font chữ dễ nhìn cho code
-        // Cho phép ấn Tab ra khoảng trắng
+        txtCodeInput.setFont(new Font("Consolas", Font.PLAIN, 15));
         txtCodeInput.setTabSize(4);
         JScrollPane scrollInput = new JScrollPane(txtCodeInput);
         inputPanel.add(scrollInput, BorderLayout.CENTER);
-        splitPane.setTopComponent(inputPanel);
 
-        // 2.2 Result Area
+        // 2.2 Execution Result Area (Bên phải)
         JPanel resultPanel = new JPanel(new BorderLayout());
-        resultPanel.setBorder(BorderFactory.createTitledBorder("Kết quả (Output / Lỗi)"));
+        resultPanel.setBorder(BorderFactory.createTitledBorder("Kết quả thực thi (Execution Result)"));
         txtResult = new JTextArea();
         txtResult.setFont(new Font("Consolas", Font.PLAIN, 14));
-        txtResult.setEditable(false); // Không cho người dùng gõ vào ô kết quả
+        txtResult.setEditable(false);
         txtResult.setBackground(new Color(245, 245, 245));
         JScrollPane scrollResult = new JScrollPane(txtResult);
         resultPanel.add(scrollResult, BorderLayout.CENTER);
-        splitPane.setBottomComponent(resultPanel);
 
-        // Bọc splitPane lại để có khoảng cách (margin) đẹp hơn
+        // Tách 2 vùng trái-phải
+        JSplitPane horizontalSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputPanel, resultPanel);
+        horizontalSplit.setResizeWeight(0.5); // Chia đều 50-50
+
+        // 2.3 Error Log Area (Bên dưới)
+        JPanel errorPanel = new JPanel(new BorderLayout());
+        errorPanel.setBorder(BorderFactory.createTitledBorder("Lỗi cú pháp (Syntax Errors)"));
+        errorPanel.setPreferredSize(new Dimension(0, 150)); // Chiều cao ban đầu
+        JTextArea txtErrorLog = new JTextArea();
+        txtErrorLog.setFont(new Font("Consolas", Font.BOLD, 14));
+        txtErrorLog.setEditable(false);
+        txtErrorLog.setForeground(Color.RED); // Chữ màu đỏ cho dễ thấy lỗi
+        txtErrorLog.setBackground(new Color(255, 240, 240));
+        JScrollPane scrollError = new JScrollPane(txtErrorLog);
+        errorPanel.add(scrollError, BorderLayout.CENTER);
+
+        // Tách phần trên (trái-phải) và phần dưới (lỗi)
+        JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, horizontalSplit, errorPanel);
+        mainSplit.setResizeWeight(0.75); // 75% cho code/result, 25% cho error
+
         JPanel centerWrapper = new JPanel(new BorderLayout());
-        centerWrapper.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
-        centerWrapper.add(splitPane, BorderLayout.CENTER);
+        centerWrapper.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+        centerWrapper.add(mainSplit, BorderLayout.CENTER);
         add(centerWrapper, BorderLayout.CENTER);
 
         // ==========================================
-        // 3. RIGHT PANEL: Chứa các nút chức năng chính (Check, Clear)
+        // 3. BOTTOM PANEL: Chứa các nút chức năng
         // ==========================================
-        JPanel actionPanel = new JPanel();
-        actionPanel.setLayout(new BoxLayout(actionPanel, BoxLayout.Y_AXIS));
-        actionPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 10));
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        actionPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
 
         btnCheck = new JButton("Check Code");
-        btnCheck.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btnCheck.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnCheck.addActionListener(this::btnCheckActionPerformed);
         
         btnClear = new JButton("Clear");
-        btnClear.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnClear.addActionListener(this::btnClearActionPerformed);
 
+        actionPanel.add(btnClear);
         actionPanel.add(btnCheck);
-        actionPanel.add(Box.createRigidArea(new Dimension(0, 15))); // Khoảng cách giữa 2 nút
+        
+        add(actionPanel, BorderLayout.SOUTH);
         actionPanel.add(btnClear);
 
         add(actionPanel, BorderLayout.EAST);

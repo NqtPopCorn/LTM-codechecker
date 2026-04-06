@@ -34,7 +34,7 @@ public class ClientUIFrame extends JFrame {
     private RSyntaxTextArea codeEditor;
     private JTextArea consoleOutput;
     private JButton btnUpload, btnCheck, btnClear, btnThemeToggle;
-    
+
     private boolean isDarkMode = true; // Mặc định mở lên là Dark Mode
 
     public ClientUIFrame() {
@@ -52,7 +52,7 @@ public class ClientUIFrame extends JFrame {
         setLayout(new BorderLayout(10, 10));
 
         initComponents();
-        
+
         // Load theme tối cho khung code editor lần đầu tiên
         applyEditorTheme("/org/fife/ui/rsyntaxtextarea/themes/monokai.xml");
     }
@@ -60,16 +60,37 @@ public class ClientUIFrame extends JFrame {
     private void initComponents() {
         // --- 1. THANH CÔNG CỤ (TOP) ---
         JPanel pnlToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
-        
+
         String[] languages = {"Python", "Java", "C++", "JavaScript", "C#"};
         cbLanguage = new JComboBox<>(languages);
-        
+        cbLanguage.addActionListener(e -> {
+            String selectedLang = (String) cbLanguage.getSelectedItem();
+            switch (selectedLang) {
+                case "Python":
+                    codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_PYTHON);
+                    break;
+                case "Java":
+                    codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
+                    break;
+                case "C++":
+                    codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS);
+                    break;
+                case "JavaScript":
+                    codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT);
+                    break;
+                case "C#":
+                    codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_CSHARP);
+                    break;
+                default:
+                    codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_NONE);
+            }
+        });
         btnUpload = new JButton("📁 Upload File");
-        
+
         btnCheck = new JButton("▶ Check & Run");
-        btnCheck.setBackground(new Color(40, 167, 69)); 
+        btnCheck.setBackground(new Color(40, 167, 69));
         btnCheck.setForeground(Color.WHITE);
-        
+
         btnClear = new JButton("🗑 Clear");
 
         // Nút chuyển đổi Dark/Light mode
@@ -89,10 +110,11 @@ public class ClientUIFrame extends JFrame {
 
         // --- 2. KHU VỰC NHẬP CODE (EDITOR) ---
         codeEditor = new RSyntaxTextArea(20, 60);
+        //
         codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_PYTHON);
         codeEditor.setCodeFoldingEnabled(true);
         codeEditor.setFont(new Font("Consolas", Font.PLAIN, 16));
-        
+
         RTextScrollPane spCode = new RTextScrollPane(codeEditor);
 
         // --- 3. KHU VỰC KẾT QUẢ (CONSOLE LOG) ---
@@ -102,17 +124,17 @@ public class ClientUIFrame extends JFrame {
         // Đặt màu mặc định cho console khi ở chế độ Dark Mode
         consoleOutput.setForeground(new Color(200, 200, 200));
         consoleOutput.setBackground(new Color(30, 30, 30));
-        
+
         JScrollPane spConsole = new JScrollPane(consoleOutput);
         spConsole.setBorder(BorderFactory.createTitledBorder("Kết quả / Lỗi"));
 
         // --- 4. GỘP VÀO SPLIT PANE ---
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, spCode, spConsole);
-        splitPane.setDividerLocation(400); 
+        splitPane.setDividerLocation(400);
         splitPane.setResizeWeight(0.7);
 
         add(splitPane, BorderLayout.CENTER);
-        ((JPanel)getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        ((JPanel) getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     }
 
     // --- HÀM XỬ LÝ ĐỔI THEME ---
@@ -123,30 +145,30 @@ public class ClientUIFrame extends JFrame {
                 // Chuyển sang giao diện Tối
                 UIManager.setLookAndFeel(new FlatDarkLaf());
                 btnThemeToggle.setText("☀️ Light Mode");
-                
+
                 // Đổi màu Console
                 consoleOutput.setForeground(new Color(200, 200, 200));
                 consoleOutput.setBackground(new Color(30, 30, 30));
-                
+
                 // Đổi màu Code Editor sang Dark (Monokai)
                 applyEditorTheme("/org/fife/ui/rsyntaxtextarea/themes/monokai.xml");
-                
+
             } else {
                 // Chuyển sang giao diện Sáng
                 UIManager.setLookAndFeel(new FlatLightLaf());
                 btnThemeToggle.setText("🌙 Dark Mode");
-                
+
                 // Đổi màu Console
                 consoleOutput.setForeground(Color.BLACK);
                 consoleOutput.setBackground(new Color(245, 245, 245));
-                
+
                 // Đổi màu Code Editor sang Light (Eclipse)
                 applyEditorTheme("/org/fife/ui/rsyntaxtextarea/themes/eclipse.xml");
             }
-            
+
             // Lệnh này bắt buộc phải có để Swing vẽ lại toàn bộ giao diện sau khi đổi LookAndFeel
             SwingUtilities.updateComponentTreeUI(this);
-            
+
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Lỗi khi chuyển đổi giao diện!");

@@ -1,81 +1,56 @@
 package com.example.dt7syntaxcheck.client;
 
+import com.example.dt7syntaxcheck.share.RequestPayload;
+import com.example.dt7syntaxcheck.share.ResponsePayload;
+import com.google.gson.Gson;
+
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.Socket;
 
-// class này xử lý kết nối và giao tiếp với server socket
-// bằng cách tạo các thread (worker) để xử lý mà không blocking UI(EDT thread)
 public class ClientService {
+    private static final String SERVER_IP = "localhost";
+    private static final int SERVER_PORT = 5000;
+    
+    private CryptoManager cryptoManager;
+    private Gson gson;
 
-    private Socket socket;
-    private BufferedReader in;
-    private BufferedWriter out;
-
-    private CryptoManager listener;
-
-    public ClientService(CryptoManager listener) {
-        this.listener = listener;
+    public ClientService() {
+        this.gson = new Gson();
+        // Giả sử dùng chung 1 key tạm thời để test. 
+        // Sau này có thể làm chức năng trao đổi key RSA với Server khi vừa kết nối.
+        this.cryptoManager = new CryptoManager("MySecretKey123456"); 
     }
 
-    public void connect(String host, int port) {
-        new Thread(() -> {
-            try {
-                socket = new Socket(host, port);
+    // Hàm này nhận payload, mã hóa, gửi đi, chờ nhận về và giải mã
+    public ResponsePayload sendCodeToServer(RequestPayload requestPayload) throws Exception {
+        // 1. Biến đối tượng thành chuỗi JSON
+        String jsonPayload = gson.toJson(requestPayload);
+        
+        // 2. Mã hóa chuỗi JSON
+        String encryptedData = cryptoManager.encrypt(jsonPayload);
 
-                in = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream()));
+        // 3. Gửi qua Socket 
+        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+             
+            // Gửi dữ liệu đã mã hóa lên Server
+            out.println(encryptedData);
 
-                out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-
-                startReceiving();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                if (listener != null) {
-                    listener.onDisconnected();
-                }
+            // 4. Chờ nhận phản hồi từ Server
+            String encryptedResponse = in.readLine();
+            
+            if (encryptedResponse == null) {
+                throw new Exception("Mất kết nối với Server!");
             }
-        }).start();
-    }
 
-    private void startReceiving() {
-        new Thread(() -> {
-            try {
-                String msg;
-                while ((msg = in.readLine()) != null) {
-                    if (listener != null) {
-                        listener.onMessageReceived(msg);
-                    }
-                }
-            } catch (IOException e) {
-                if (listener != null) {
-                    listener.onDisconnected();
-                }
-            }
-        }).start();
-    }
-
-    public void send(String message) {
-        if (out != null) {
-            try {
-                out.write(message);
-                out.newLine();
-                out.flush();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public void disconnect() {
-        try {
-            socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+            // 5. Giải mã phản hồi
+            String decryptedJson = cryptoManager.decrypt(encryptedResponse);
+            
+            // 6. Biến chuỗi JSON trở lại thành đối tượng ResponsePayload
+            return gson.fromJson(decryptedJson, ResponsePayload.class);
         }
     }
 }

@@ -18,6 +18,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -25,6 +26,8 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
+import com.example.dt7syntaxcheck.share.RequestPayload;
+import com.example.dt7syntaxcheck.share.ResponsePayload;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 
@@ -36,6 +39,9 @@ public class ClientUIFrame extends JFrame {
     private JButton btnUpload, btnCheck, btnClear, btnThemeToggle;
 
     private boolean isDarkMode = true; // Mặc định mở lên là Dark Mode
+
+    // Khởi tạo service xử lý mạng và mã hóa
+    private ClientService clientService = new ClientService();
 
     public ClientUIFrame() {
         // Thiết lập giao diện mặc định là Dark Mode khi khởi động
@@ -63,6 +69,8 @@ public class ClientUIFrame extends JFrame {
 
         String[] languages = {"Python", "Java", "C++", "JavaScript", "C#"};
         cbLanguage = new JComboBox<>(languages);
+
+        //Set tô màu cho từng ngôn ngữ:))
         cbLanguage.addActionListener(e -> {
             String selectedLang = (String) cbLanguage.getSelectedItem();
             switch (selectedLang) {
@@ -182,6 +190,92 @@ public class ClientUIFrame extends JFrame {
             theme.apply(codeEditor);
         } catch (IOException ioe) {
             System.err.println("Không thể load theme cho code editor: " + themePath);
+        }
+    }
+
+    private void handleCheckCode() {
+        // 1. Lấy code từ khung Editor
+        String code = codeEditor.getText();
+        if (code.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập code hoặc upload file trước khi kiểm tra!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // 2. Lấy ngôn ngữ đang chọn và map sang ID
+        String selectedLang = (String) cbLanguage.getSelectedItem();
+        int langId = getLanguageId(selectedLang);
+
+        consoleOutput.setText("Đang mã hóa và gửi code (" + selectedLang + ") lên Server...\n");
+        btnCheck.setEnabled(false); // Khóa nút bấm để tránh người dùng spam click
+
+        // 3. Đóng gói code vào RequestPayload
+        RequestPayload payload = new RequestPayload(code, langId);
+
+        // 4. Sử dụng SwingWorker để gửi qua Socket ở luồng nền (tránh đơ UI)
+        SwingWorker<ResponsePayload, Void> worker = new SwingWorker<>() {
+            @Override
+            protected ResponsePayload doInBackground() throws Exception {
+                // Gọi ClientService: Hàm này sẽ tự động mã hóa và gửi qua TCP Socket
+                return clientService.sendCodeToServer(payload);
+            }
+
+            @Override
+            protected void done() {
+                btnCheck.setEnabled(true); // Mở khóa nút bấm
+                try {
+                    // Lấy kết quả trả về từ Server (đã được giải mã)
+                    ResponsePayload response = get();
+
+                    if (response.isSuccess()) {
+                        // TRƯỜNG HỢP 1: CODE ĐÚNG SYNTAX
+                        consoleOutput.append("\n=== KẾT QUẢ CHẠY THÀNH CÔNG ===\n");
+                        consoleOutput.append(response.getOutput());
+
+                        // Đề bài yêu cầu: format đúng chuẩn nếu code đúng syntax
+                        String formatted = response.getFormattedCode();
+                        if (formatted != null && !formatted.isEmpty()) {
+                            codeEditor.setText(formatted);
+                            consoleOutput.append("\n\n[Hệ thống đã tự động Format lại code của bạn theo chuẩn]");
+                        }
+                    } else {
+                        // TRƯỜNG HỢP 2: CODE SAI SYNTAX
+                        consoleOutput.append("\n=== PHÁT HIỆN LỖI CÚ PHÁP ===\n");
+                        if (response.getErrors() != null && !response.getErrors().isEmpty()) {
+                            for (var error : response.getErrors()) {
+                                consoleOutput.append("-> Dòng " + error.getLine() + ": " + error.getMessage() + "\n");
+                                // Tương lai: Có thể nối thêm "Gợi ý sửa lỗi" từ Server vào đây
+                            }
+                        } else {
+                            // Nếu không parse được list lỗi, in luôn chuỗi lỗi gốc
+                            consoleOutput.append(response.getOutput());
+                        }
+                    }
+                } catch (Exception e) {
+                    // Bắt lỗi mất kết nối hoặc Server chưa mở
+                    consoleOutput.append("\n[LỖI KẾT NỐI]: " + e.getMessage());
+                    consoleOutput.append("\nHãy đảm bảo Server đang chạy ở port 5000!");
+                }
+            }
+        };
+
+        worker.execute(); // Bắt đầu chạy luồng nền
+    }
+
+    // Map tên ngôn ngữ sang ID (Giả sử dùng chuẩn ID của Judge0 API)
+    private int getLanguageId(String langName) {
+        switch (langName) {
+            case "C#":
+                return 51;
+            case "C++":
+                return 54;
+            case "Java":
+                return 62;
+            case "JavaScript":
+                return 63;
+            case "Python":
+                return 71;
+            default:
+                return 71; // Mặc định là Python
         }
     }
 

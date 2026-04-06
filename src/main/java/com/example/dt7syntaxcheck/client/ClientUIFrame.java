@@ -2,21 +2,14 @@ package com.example.dt7syntaxcheck.client;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.event.ActionEvent;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -24,200 +17,154 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
-public class ClientUIFrame extends JFrame {
-    private ClientService clientService;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.fife.ui.rsyntaxtextarea.Theme;
+import org.fife.ui.rtextarea.RTextScrollPane;
 
-    // Các thành phần UI
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+
+public class ClientUIFrame extends JFrame {
+
     private JComboBox<String> cbLanguage;
-    private JButton btnUpload;
-    private JButton btnCheck;
-    private JButton btnClear;
-    private JTextArea txtCodeInput;
-    private JTextArea txtResult;
-    private JLabel lblHeader;
+    private RSyntaxTextArea codeEditor;
+    private JTextArea consoleOutput;
+    private JButton btnUpload, btnCheck, btnClear, btnThemeToggle;
+    
+    private boolean isDarkMode = true; // Mặc định mở lên là Dark Mode
 
     public ClientUIFrame() {
-        initComponents();
-        
-        // Khởi tạo ClientService và bắt sự kiện nhận tin nhắn
-        clientService = new ClientService(new CryptoManager() {
-            @Override
-            public void onMessageReceived(String message) {
-                // Đẩy tác vụ cập nhật UI vào Event Dispatch Thread để tránh lỗi treo giao diện
-                SwingUtilities.invokeLater(() -> {
-                    txtResult.append(message + "\n");
-                });
-            }
+        // Thiết lập giao diện mặc định là Dark Mode khi khởi động
+        try {
+            UIManager.setLookAndFeel(new FlatDarkLaf());
+        } catch (Exception ex) {
+            System.err.println("Failed to initialize LaF");
+        }
 
-            @Override
-            public void onDisconnected() {
-                SwingUtilities.invokeLater(() -> {
-                    txtResult.append("[-] Mất kết nối tới server.\n");
-                });
-            }
-        });
-
-        // Kết nối đến server socket
-        clientService.connect("localhost", 5000);
-    }
-
-    private void initComponents() {
-        setTitle("Code Syntax Checker Client");
+        setTitle("Ứng Dụng Kiểm Tra & Thực Thi Code - Đề Tài 7");
+        setSize(950, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 650);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // ==========================================
-        // 1. TOP PANEL: Chứa Tiêu đề, Chọn ngôn ngữ và Nút Upload
-        // ==========================================
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 10));
+        initComponents();
         
-        lblHeader = new JLabel("Code Syntax Checker", SwingConstants.LEFT);
-        lblHeader.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        topPanel.add(lblHeader, BorderLayout.WEST);
+        // Load theme tối cho khung code editor lần đầu tiên
+        applyEditorTheme("/org/fife/ui/rsyntaxtextarea/themes/monokai.xml");
+    }
 
-        JPanel controlsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        controlsPanel.add(new JLabel("Ngôn ngữ:"));
+    private void initComponents() {
+        // --- 1. THANH CÔNG CỤ (TOP) ---
+        JPanel pnlToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
         
         String[] languages = {"Python", "Java", "C++", "JavaScript", "C#"};
         cbLanguage = new JComboBox<>(languages);
-        controlsPanel.add(cbLanguage);
-
-        btnUpload = new JButton("Upload File");
-        btnUpload.addActionListener(this::btnUploadActionPerformed);
-        controlsPanel.add(btnUpload);
-
-        topPanel.add(controlsPanel, BorderLayout.EAST);
-        add(topPanel, BorderLayout.NORTH);
-
-        // ==========================================
-        // 2. MAIN PANEL: Chứa 3 vùng chính
-        // ==========================================
         
-        // 2.1 Code Input Area (Bên trái)
-        JPanel inputPanel = new JPanel(new BorderLayout());
-        inputPanel.setBorder(BorderFactory.createTitledBorder("Nhập mã nguồn (Source Code)"));
-        txtCodeInput = new JTextArea();
-        txtCodeInput.setFont(new Font("Consolas", Font.PLAIN, 15));
-        txtCodeInput.setTabSize(4);
-        JScrollPane scrollInput = new JScrollPane(txtCodeInput);
-        inputPanel.add(scrollInput, BorderLayout.CENTER);
-
-        // 2.2 Execution Result Area (Bên phải)
-        JPanel resultPanel = new JPanel(new BorderLayout());
-        resultPanel.setBorder(BorderFactory.createTitledBorder("Kết quả thực thi (Execution Result)"));
-        txtResult = new JTextArea();
-        txtResult.setFont(new Font("Consolas", Font.PLAIN, 14));
-        txtResult.setEditable(false);
-        txtResult.setBackground(new Color(245, 245, 245));
-        JScrollPane scrollResult = new JScrollPane(txtResult);
-        resultPanel.add(scrollResult, BorderLayout.CENTER);
-
-        // Tách 2 vùng trái-phải
-        JSplitPane horizontalSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputPanel, resultPanel);
-        horizontalSplit.setResizeWeight(0.5); // Chia đều 50-50
-
-        // 2.3 Error Log Area (Bên dưới)
-        JPanel errorPanel = new JPanel(new BorderLayout());
-        errorPanel.setBorder(BorderFactory.createTitledBorder("Lỗi cú pháp (Syntax Errors)"));
-        errorPanel.setPreferredSize(new Dimension(0, 150)); // Chiều cao ban đầu
-        JTextArea txtErrorLog = new JTextArea();
-        txtErrorLog.setFont(new Font("Consolas", Font.BOLD, 14));
-        txtErrorLog.setEditable(false);
-        txtErrorLog.setForeground(Color.RED); // Chữ màu đỏ cho dễ thấy lỗi
-        txtErrorLog.setBackground(new Color(255, 240, 240));
-        JScrollPane scrollError = new JScrollPane(txtErrorLog);
-        errorPanel.add(scrollError, BorderLayout.CENTER);
-
-        // Tách phần trên (trái-phải) và phần dưới (lỗi)
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, horizontalSplit, errorPanel);
-        mainSplit.setResizeWeight(0.75); // 75% cho code/result, 25% cho error
-
-        JPanel centerWrapper = new JPanel(new BorderLayout());
-        centerWrapper.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-        centerWrapper.add(mainSplit, BorderLayout.CENTER);
-        add(centerWrapper, BorderLayout.CENTER);
-
-        // ==========================================
-        // 3. BOTTOM PANEL: Chứa các nút chức năng
-        // ==========================================
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        actionPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
-
-        btnCheck = new JButton("Check Code");
-        btnCheck.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnCheck.addActionListener(this::btnCheckActionPerformed);
+        btnUpload = new JButton("📁 Upload File");
         
-        btnClear = new JButton("Clear");
-        btnClear.addActionListener(this::btnClearActionPerformed);
-
-        actionPanel.add(btnClear);
-        actionPanel.add(btnCheck);
+        btnCheck = new JButton("▶ Check & Run");
+        btnCheck.setBackground(new Color(40, 167, 69)); 
+        btnCheck.setForeground(Color.WHITE);
         
-        add(actionPanel, BorderLayout.SOUTH);
-        actionPanel.add(btnClear);
+        btnClear = new JButton("🗑 Clear");
 
-        add(actionPanel, BorderLayout.EAST);
+        // Nút chuyển đổi Dark/Light mode
+        btnThemeToggle = new JButton("☀️ Light Mode");
+        btnThemeToggle.addActionListener(e -> toggleTheme());
+
+        pnlToolbar.add(new JLabel("Ngôn ngữ:"));
+        pnlToolbar.add(cbLanguage);
+        pnlToolbar.add(btnUpload);
+        pnlToolbar.add(Box.createHorizontalStrut(10));
+        pnlToolbar.add(btnCheck);
+        pnlToolbar.add(btnClear);
+        pnlToolbar.add(Box.createHorizontalStrut(30)); // Đẩy nút theme sang phải một chút
+        pnlToolbar.add(btnThemeToggle);
+
+        add(pnlToolbar, BorderLayout.NORTH);
+
+        // --- 2. KHU VỰC NHẬP CODE (EDITOR) ---
+        codeEditor = new RSyntaxTextArea(20, 60);
+        codeEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_PYTHON);
+        codeEditor.setCodeFoldingEnabled(true);
+        codeEditor.setFont(new Font("Consolas", Font.PLAIN, 16));
+        
+        RTextScrollPane spCode = new RTextScrollPane(codeEditor);
+
+        // --- 3. KHU VỰC KẾT QUẢ (CONSOLE LOG) ---
+        consoleOutput = new JTextArea();
+        consoleOutput.setEditable(false);
+        consoleOutput.setFont(new Font("Consolas", Font.PLAIN, 14));
+        // Đặt màu mặc định cho console khi ở chế độ Dark Mode
+        consoleOutput.setForeground(new Color(200, 200, 200));
+        consoleOutput.setBackground(new Color(30, 30, 30));
+        
+        JScrollPane spConsole = new JScrollPane(consoleOutput);
+        spConsole.setBorder(BorderFactory.createTitledBorder("Kết quả / Lỗi"));
+
+        // --- 4. GỘP VÀO SPLIT PANE ---
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, spCode, spConsole);
+        splitPane.setDividerLocation(400); 
+        splitPane.setResizeWeight(0.7);
+
+        add(splitPane, BorderLayout.CENTER);
+        ((JPanel)getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     }
 
-    // Xử lý sự kiện khi ấn nút Upload File
-    private void btnUploadActionPerformed(ActionEvent evt) {
-        JFileChooser fileChooser = new JFileChooser();
-        int result = fileChooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File selectedFile = fileChooser.getSelectedFile();
-            try {
-                // Đọc toàn bộ nội dung file và nhét vào txtCodeInput
-                String content = new String(Files.readAllBytes(selectedFile.toPath()));
-                txtCodeInput.setText(content);
-            } catch (IOException e) {
-                JOptionPane.showMessageDialog(this, "Lỗi khi đọc file: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-
-    // Xử lý sự kiện khi ấn nút Check Code
-    private void btnCheckActionPerformed(ActionEvent evt) {
-        String code = txtCodeInput.getText().trim();
-        String language = (String) cbLanguage.getSelectedItem();
-        
-        if (code.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập code hoặc upload file!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        txtResult.setText("Đang xử lý...\n");
-        
-        // TODO GIAI ĐOẠN SAU: 
-        // Tạo đối tượng RequestPayload, gán language và code vào.
-        // Dùng class CryptoManager mã hóa đối tượng này thành JSON/Byte array.
-        // Gửi qua hàm clientService.send()
-        
-        // Tạm thời gửi một chuỗi string test để kiểm tra kết nối Socket:
-        clientService.send("LANG:" + language + "\n" + code);
-    }
-
-    // Xử lý sự kiện khi ấn nút Clear
-    private void btnClearActionPerformed(ActionEvent evt) {
-        txtCodeInput.setText("");
-        txtResult.setText("");
-    }
-
-    public static void main(String args[]) {
-        // Thiết lập giao diện theo phong cách của Hệ điều hành đang dùng (Windows/macOS)
+    // --- HÀM XỬ LÝ ĐỔI THEME ---
+    private void toggleTheme() {
+        isDarkMode = !isDarkMode;
         try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            if (isDarkMode) {
+                // Chuyển sang giao diện Tối
+                UIManager.setLookAndFeel(new FlatDarkLaf());
+                btnThemeToggle.setText("☀️ Light Mode");
+                
+                // Đổi màu Console
+                consoleOutput.setForeground(new Color(200, 200, 200));
+                consoleOutput.setBackground(new Color(30, 30, 30));
+                
+                // Đổi màu Code Editor sang Dark (Monokai)
+                applyEditorTheme("/org/fife/ui/rsyntaxtextarea/themes/monokai.xml");
+                
+            } else {
+                // Chuyển sang giao diện Sáng
+                UIManager.setLookAndFeel(new FlatLightLaf());
+                btnThemeToggle.setText("🌙 Dark Mode");
+                
+                // Đổi màu Console
+                consoleOutput.setForeground(Color.BLACK);
+                consoleOutput.setBackground(new Color(245, 245, 245));
+                
+                // Đổi màu Code Editor sang Light (Eclipse)
+                applyEditorTheme("/org/fife/ui/rsyntaxtextarea/themes/eclipse.xml");
+            }
+            
+            // Lệnh này bắt buộc phải có để Swing vẽ lại toàn bộ giao diện sau khi đổi LookAndFeel
+            SwingUtilities.updateComponentTreeUI(this);
+            
         } catch (Exception ex) {
             ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Lỗi khi chuyển đổi giao diện!");
         }
-        
-        java.awt.EventQueue.invokeLater(() -> {
+    }
+
+    // Hàm load file XML theme của thư viện RSyntaxTextArea
+    private void applyEditorTheme(String themePath) {
+        try {
+            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
+            theme.apply(codeEditor);
+        } catch (IOException ioe) {
+            System.err.println("Không thể load theme cho code editor: " + themePath);
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
             new ClientUIFrame().setVisible(true);
         });
     }

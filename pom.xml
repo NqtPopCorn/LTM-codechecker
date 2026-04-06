@@ -11,4 +11,22 @@
         <maven.compiler.target>21</maven.compiler.target>
         <exec.mainClass>com.example.dt7syntaxcheck.Dt7syntaxcheck</exec.mainClass>
     </properties>
+
+
+    <dependencies>
+    <dependency>
+    <groupId>com.formdev</groupId>
+    <artifactId>flatlaf</artifactId>
+    <version>3.2.5</version>
+    </dependency>
+
+    <dependency>
+    <groupId>com.fifesoft</groupId>
+    <artifactId>rsyntaxtextarea</artifactId>
+    <version>3.3.0</version>
+    </dependency>
+
+    </dependencies>
+
+
 </project>

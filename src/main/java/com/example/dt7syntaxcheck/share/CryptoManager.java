@@ -1,4 +1,4 @@
-package com.example.dt7syntaxcheck.client;
+package com.example.dt7syntaxcheck.share;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

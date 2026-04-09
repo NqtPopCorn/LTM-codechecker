@@ -11,8 +11,10 @@ public class PythonExecutor implements ICodeExecutor {
         StringBuilder output = new StringBuilder();
         try {
             ProcessBuilder pb = new ProcessBuilder("python", filePath)
+                    // .directory(null)
                     .redirectErrorStream(true); // gộp stderr vào stdout để đọc lỗi từ python
-
+                    
+                
             Process process = pb.start();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {

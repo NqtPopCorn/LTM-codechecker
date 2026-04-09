@@ -9,5 +9,5 @@ package com.example.dt7syntaxcheck.server;
  * @author truon
  */
 public interface IFormatter {
-
+    String format(String code);
 }

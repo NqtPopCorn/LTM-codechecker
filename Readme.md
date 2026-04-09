@@ -169,3 +169,18 @@ Program.cs(7,43): error CS1002: ; expected
 ```ps
 Program.exe
 ```
+
+## Formatting code
+
+### Prerequisites
+
+```ps
+npm install --global prettier
+```
+
+### Execute format
+
+```ps
+prettier --write <path/to/your/file.js>
+
+```

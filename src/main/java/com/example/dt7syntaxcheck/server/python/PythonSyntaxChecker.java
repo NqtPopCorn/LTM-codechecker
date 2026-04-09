@@ -28,15 +28,23 @@ public class PythonSyntaxChecker implements ISyntaxChecker {
     private String executeCMD(String filePath) {
         StringBuilder output = new StringBuilder();
         try {
-            ProcessBuilder pb = new ProcessBuilder("python", "-m", "pyright", filePath)
-                    .redirectErrorStream(true); // gộp stderr vào stdout để đọc lỗi từ pyright
-
+            ProcessBuilder pb = new ProcessBuilder("python", "-m", "pyright", filePath, "2> err.txt");
+                    // .directory(null);
+            //         .redirectErrorStream(false); // gộp stderr vào stdout để đọc lỗi từ pyright
+            // pb.redirectError(ProcessBuilder.Redirect.PIPE);
             Process process = pb.start();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append("\n");
+                }
+            }
+            try (BufferedReader errorReader = new BufferedReader(
+                    new InputStreamReader(process.getErrorStream()))) {
+                String errorLine;
+                while ((errorLine = errorReader.readLine()) != null) {
+                    throw new RuntimeException("Pyright error: " + errorLine);
                 }
             }
             process.waitFor();

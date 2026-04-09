@@ -15,7 +15,6 @@ public class SyntaxChecker {
             return errorLogs;
         }
 
-        // Tách chuỗi lỗi gốc thành từng dòng để dễ dàng quét (scan) giống VS Code
         String[] lines = rawError.split("\n");
         List<Integer> processedLines = new ArrayList<>();
 
@@ -26,72 +25,102 @@ public class SyntaxChecker {
 
             Matcher m;
             switch (languageId) {
-                case 62: // Java (Định dạng: File.java:X: error: <Thông_báo_lỗi>)
+                case 62: // Java
                     m = Pattern.compile(":(\\d+):\\s*error:\\s*(.*)").matcher(line);
                     if (m.find()) {
                         lineNumber = Integer.parseInt(m.group(1));
-                        errorMessage = m.group(2); // Lấy trực tiếp thông báo lỗi của JDK
+                        errorMessage = m.group(2);
                     }
                     break;
 
-                case 54: // C++ (Định dạng: File.cpp:X:Y: error: <Thông_báo_lỗi>)
+                case 54: // C++
                     m = Pattern.compile(":(\\d+):\\d+:\\s*error:\\s*(.*)").matcher(line);
                     if (m.find()) {
                         lineNumber = Integer.parseInt(m.group(1));
-                        errorMessage = m.group(2); // Lấy trực tiếp thông báo lỗi của GCC
+                        errorMessage = m.group(2);
                     }
                     break;
 
-                case 51: // C# (Định dạng: File.cs(X,Y): error CSXXXX: <Thông_báo_lỗi>)
+                case 51: // C#
                     m = Pattern.compile("\\((\\d+),\\d+\\):\\s*error\\s+[^:]+:\\s*(.*)").matcher(line);
                     if (m.find()) {
                         lineNumber = Integer.parseInt(m.group(1));
-                        errorMessage = m.group(2); // Lấy trực tiếp thông báo lỗi của Roslyn
+                        errorMessage = m.group(2);
                     }
                     break;
 
                 case 71: // Python
-                    // Python hiển thị dòng lỗi ở trên, thông báo lỗi ở cuối cùng
                     m = Pattern.compile("line (\\d+)").matcher(line);
                     if (m.find()) {
                         lineNumber = Integer.parseInt(m.group(1));
-                        errorMessage = lines[lines.length - 1].trim(); // Lấy dòng cuối của Traceback
+                        errorMessage = extractPythonOrJsError(lines); // Gọi hàm trích xuất thông minh
                     }
                     break;
 
                 case 63: // JavaScript (Node.js)
+                    // QUAN TRỌNG: Bỏ qua các dòng truy vết từ file nội bộ của NodeJS
+                    if (line.contains("internal/") || line.contains("node:")) {
+                        continue;
+                    }
+
                     m = Pattern.compile("\\.js:(\\d+)").matcher(line);
                     Matcher m2 = Pattern.compile("evalmachine\\.<anonymous>:(\\d+)").matcher(line);
+
                     if (m.find()) {
                         lineNumber = Integer.parseInt(m.group(1));
-                        errorMessage = lines[lines.length - 1].trim();
+                        errorMessage = extractPythonOrJsError(lines);
                     } else if (m2.find()) {
                         lineNumber = Integer.parseInt(m2.group(1));
-                        errorMessage = lines[lines.length - 1].trim();
+                        errorMessage = extractPythonOrJsError(lines);
                     }
                     break;
             }
 
-            // Nếu tìm thấy dòng lỗi và dòng này chưa được báo cáo
+            // Nếu tìm thấy dòng lỗi (và chưa bị trùng)
             if (lineNumber != -1 && !processedLines.contains(lineNumber)) {
-                // Tự động viết hoa chữ cái đầu tiên cho chuẩn form IDE
+                // Viết hoa chữ cái đầu cho chuẩn form IDE
                 if (!errorMessage.isEmpty()) {
                     errorMessage = errorMessage.substring(0, 1).toUpperCase() + errorMessage.substring(1);
                 }
-
-                // Add vào danh sách ErrorLog gửi về Client (không kèm chữ Gợi ý)
                 errorLogs.add(new ErrorLog(lineNumber, 0, errorMessage));
                 processedLines.add(lineNumber);
             }
         }
 
-        // Fallback: Đề phòng trường hợp lỗi lạ (không khớp Regex)
-        // Hệ thống sẽ trả về dòng cuối cùng của chuỗi lỗi để Client không bị "mù" thông tin
+        // Fallback: Nếu không bóc tách được bằng Regex
         if (errorLogs.isEmpty() && lines.length > 0) {
             String fallbackMsg = lines[lines.length - 1].trim();
+            // Đảm bảo không in ra những dòng "at internal/..." vô nghĩa
+            if (fallbackMsg.contains("internal/") || fallbackMsg.contains("at ")) {
+                fallbackMsg = extractPythonOrJsError(lines);
+            }
             errorLogs.add(new ErrorLog(0, 0, fallbackMsg));
         }
 
         return errorLogs;
+    }
+
+    /**
+     * Hàm hỗ trợ "Săn" thông báo lỗi chính xác cho Python và JavaScript Thay vì
+     * lấy bừa dòng cuối, nó sẽ tìm dòng có chữ "Error"
+     */
+    private String extractPythonOrJsError(String[] lines) {
+        // Quét ngược từ dưới lên để tìm dòng chứa chữ "Error:" (Vd: SyntaxError, ReferenceError)
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String l = lines[i].trim();
+            if (l.contains("Error:")) {
+                return l; // Trả về câu thông báo lỗi chuẩn xác
+            }
+        }
+
+        // Nếu không có chữ Error:, lấy dòng cuối cùng không phải là Stack Trace
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String l = lines[i].trim();
+            if (!l.isEmpty() && !l.startsWith("at ") && !l.contains("internal/")) {
+                return l;
+            }
+        }
+
+        return "Lỗi cú pháp (Syntax Error)"; // Thông báo mặc định an toàn
     }
 }

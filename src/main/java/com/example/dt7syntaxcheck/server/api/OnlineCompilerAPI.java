@@ -44,10 +44,12 @@ public class OnlineCompilerAPI {
                 .build();
 
         try (Response response = client.newCall(request).execute()) {
+            String responseBody = response.body().string(); // Đọc body trong mọi trường hợp
             if (!response.isSuccessful()) {
-                throw new IOException("Lỗi gọi Judge0 API: " + response.code() + " - " + response.message());
+                // Ném exception với thông tin lỗi chi tiết từ body
+                throw new IOException("Lỗi gọi Judge0 API: " + response.code() + " - " + responseBody);
             }
-            return response.body().string();
+            return responseBody; // Trả về body nếu thành công
         }
     }
 }

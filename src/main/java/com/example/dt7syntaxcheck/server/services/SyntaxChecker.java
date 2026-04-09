@@ -15,44 +15,83 @@ public class SyntaxChecker {
             return errorLogs;
         }
 
-        Pattern pattern = null;
+        // Tách chuỗi lỗi gốc thành từng dòng để dễ dàng quét (scan) giống VS Code
+        String[] lines = rawError.split("\n");
+        List<Integer> processedLines = new ArrayList<>();
 
-        switch (languageId) {
-            case 71: // Python 
-                pattern = Pattern.compile("line (\\d+)");
-                break;
-            case 62: // Java
-            case 54: // C++
-            case 51: // C# 
-                pattern = Pattern.compile(":(\\d+):");
-                break;
-            case 63: // JavaScript
-                pattern = Pattern.compile("evalmachine\\.<anonymous>:(\\d+)");
-                break;
-        }
+        for (String line : lines) {
+            line = line.trim();
+            int lineNumber = -1;
+            String errorMessage = "";
 
-        if (pattern != null) {
-            Matcher matcher = pattern.matcher(rawError);
-            while (matcher.find()) {
-                int lineNumber = Integer.parseInt(matcher.group(1));
-                String hint = generateHint(rawError);
-                errorLogs.add(new ErrorLog(lineNumber, 0, "Lỗi cú pháp tại dòng này. " + hint));
+            Matcher m;
+            switch (languageId) {
+                case 62: // Java (Định dạng: File.java:X: error: <Thông_báo_lỗi>)
+                    m = Pattern.compile(":(\\d+):\\s*error:\\s*(.*)").matcher(line);
+                    if (m.find()) {
+                        lineNumber = Integer.parseInt(m.group(1));
+                        errorMessage = m.group(2); // Lấy trực tiếp thông báo lỗi của JDK
+                    }
+                    break;
+
+                case 54: // C++ (Định dạng: File.cpp:X:Y: error: <Thông_báo_lỗi>)
+                    m = Pattern.compile(":(\\d+):\\d+:\\s*error:\\s*(.*)").matcher(line);
+                    if (m.find()) {
+                        lineNumber = Integer.parseInt(m.group(1));
+                        errorMessage = m.group(2); // Lấy trực tiếp thông báo lỗi của GCC
+                    }
+                    break;
+
+                case 51: // C# (Định dạng: File.cs(X,Y): error CSXXXX: <Thông_báo_lỗi>)
+                    m = Pattern.compile("\\((\\d+),\\d+\\):\\s*error\\s+[^:]+:\\s*(.*)").matcher(line);
+                    if (m.find()) {
+                        lineNumber = Integer.parseInt(m.group(1));
+                        errorMessage = m.group(2); // Lấy trực tiếp thông báo lỗi của Roslyn
+                    }
+                    break;
+
+                case 71: // Python
+                    // Python hiển thị dòng lỗi ở trên, thông báo lỗi ở cuối cùng
+                    m = Pattern.compile("line (\\d+)").matcher(line);
+                    if (m.find()) {
+                        lineNumber = Integer.parseInt(m.group(1));
+                        errorMessage = lines[lines.length - 1].trim(); // Lấy dòng cuối của Traceback
+                    }
+                    break;
+
+                case 63: // JavaScript (Node.js)
+                    m = Pattern.compile("\\.js:(\\d+)").matcher(line);
+                    Matcher m2 = Pattern.compile("evalmachine\\.<anonymous>:(\\d+)").matcher(line);
+                    if (m.find()) {
+                        lineNumber = Integer.parseInt(m.group(1));
+                        errorMessage = lines[lines.length - 1].trim();
+                    } else if (m2.find()) {
+                        lineNumber = Integer.parseInt(m2.group(1));
+                        errorMessage = lines[lines.length - 1].trim();
+                    }
+                    break;
+            }
+
+            // Nếu tìm thấy dòng lỗi và dòng này chưa được báo cáo
+            if (lineNumber != -1 && !processedLines.contains(lineNumber)) {
+                // Tự động viết hoa chữ cái đầu tiên cho chuẩn form IDE
+                if (!errorMessage.isEmpty()) {
+                    errorMessage = errorMessage.substring(0, 1).toUpperCase() + errorMessage.substring(1);
+                }
+
+                // Add vào danh sách ErrorLog gửi về Client (không kèm chữ Gợi ý)
+                errorLogs.add(new ErrorLog(lineNumber, 0, errorMessage));
+                processedLines.add(lineNumber);
             }
         }
-        return errorLogs;
-    }
 
-    private String generateHint(String rawError) {
-        String errorLower = rawError.toLowerCase();
-        if (errorLower.contains("expected ';'") || errorLower.contains("missing ';'")) {
-            return "Gợi ý: Bạn có quên dấu chấm phẩy ';' ở cuối câu lệnh không?";
+        // Fallback: Đề phòng trường hợp lỗi lạ (không khớp Regex)
+        // Hệ thống sẽ trả về dòng cuối cùng của chuỗi lỗi để Client không bị "mù" thông tin
+        if (errorLogs.isEmpty() && lines.length > 0) {
+            String fallbackMsg = lines[lines.length - 1].trim();
+            errorLogs.add(new ErrorLog(0, 0, fallbackMsg));
         }
-        if (errorLower.contains("was not declared")) {
-            return "Gợi ý: Biến hoặc hàm này chưa được khai báo.";
-        }
-        if (errorLower.contains("invalid syntax")) {
-            return "Gợi ý: Kiểm tra lại cấu trúc lệnh, có thể thiếu dấu hai chấm ':' hoặc ngoặc.";
-        }
-        return "Gợi ý: Hãy kiểm tra kỹ lại chính tả và các dấu ngoặc đóng/mở.";
+
+        return errorLogs;
     }
 }

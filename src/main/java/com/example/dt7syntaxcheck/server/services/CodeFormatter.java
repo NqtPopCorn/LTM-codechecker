@@ -11,39 +11,39 @@ import okhttp3.Response;
 public class CodeFormatter {
 
     public String formatCode(String rawCode, int languageId) {
-        if (languageId == 71) {
-            return rawCode;
-        }
+        String mode = "javascript"; // Mặc định
 
-        String langName = "";
+        // Ánh xạ chính xác ID ngôn ngữ sang Mode của API CodeBeautify
         switch (languageId) {
-            case 62:
-                langName = "Java";
+            case 62: // Java
+                mode = "java";
                 break;
-            case 54:
-                langName = "C++";
+            case 54: // C++
+                mode = "c_cpp";
                 break;
-            case 51:
-                langName = "C#";
+            case 51: // C#
+                mode = "csharp";
                 break;
-            case 63:
-                langName = "JavaScript";
+            case 63: // JavaScript
+                mode = "javascript";
                 break;
+            case 71: // Python (Bản cũ)
+            case 92: // Python 3.11 (Bản mới)
+                mode = "python";
+                break;
+            default:
+                return rawCode; // Nếu ngôn ngữ lạ, trả về code gốc
         }
 
-        return callFormatterAPI(rawCode, langName);
+        return callFormatterAPI(rawCode, mode, languageId);
     }
 
-    private String callFormatterAPI(String rawCode, String lang) {
+    private String callFormatterAPI(String rawCode, String mode, int languageId) {
         try {
             OkHttpClient client = new OkHttpClient();
 
+            // Sử dụng API định dạng chuẩn
             String apiUrl = "https://codebeautify.org/api/format";
-
-            String mode = "javascript";
-            if (lang.equals("Java") || lang.equals("C++") || lang.equals("C#")) {
-                mode = "c_cpp";
-            }
 
             RequestBody body = new FormBody.Builder()
                     .add("code", rawCode)
@@ -61,6 +61,7 @@ public class CodeFormatter {
 
                     try {
                         JSONObject json = new JSONObject(respString);
+                        // Tùy theo ngôn ngữ mà API trả về khóa result hoặc formatted_code
                         if (json.has("result")) {
                             return json.getString("result");
                         }
@@ -68,45 +69,16 @@ public class CodeFormatter {
                             return json.getString("formatted_code");
                         }
                     } catch (Exception e) {
+                        // Nếu dữ liệu trả về không phải JSON mà là String trơn
                         return respString;
                     }
                 }
             }
         } catch (Exception e) {
-            System.err.println("[WARNING] Lỗi gọi API Formatter, chuyển sang dùng Format Basic: " + e.getMessage());
+            System.err.println("[WARNING] Lỗi gọi API Formatter, trả về code gốc: " + e.getMessage());
         }
 
-        return formatCodeBasic(rawCode);
-    }
-
-    // ĐÃ KHÔI PHỤC HÀM BACKUP DƯỚI ĐÂY
-    private String formatCodeBasic(String rawCode) {
-        StringBuilder formatted = new StringBuilder();
-        int indentLevel = 0;
-        String tab = "    ";
-
-        String cleanedCode = rawCode.replaceAll("\\s+", " ").replace("{", "{\n").replace("}", "}\n").replace(";", ";\n");
-        String[] lines = cleanedCode.split("\n");
-
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
-
-            if (line.startsWith("}")) {
-                indentLevel = Math.max(0, indentLevel - 1);
-            }
-
-            for (int i = 0; i < indentLevel; i++) {
-                formatted.append(tab);
-            }
-            formatted.append(line).append("\n");
-
-            if (line.endsWith("{")) {
-                indentLevel++;
-            }
-        }
-        return formatted.toString();
+        // Nếu API sập, trả về code gốc
+        return rawCode;
     }
 }

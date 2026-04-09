@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+// Lớp ClientHandler sẽ được tạo ra cho mỗi Client kết nối tới Server. Mỗi ClientHandler chạy trên một luồng riêng biệt để xử lý song song nhiều Client cùng lúc.
 public class ClientHandler extends Thread {
 
     private Socket socket;
@@ -57,21 +58,54 @@ public class ClientHandler extends Thread {
             logInfo("Giải mã thành công! Nhận code thuộc Ngôn ngữ ID: " + request.getLanguageId());
 
             // ==========================================
-            // TRẠM 2 + 3: GỌI API & XỬ LÝ (Sẽ code ở phần sau)
+            // TRẠM 2 + 3: GỌI API & XỬ LÝ (DÙNG PISTON API)
             // ==========================================
-            logInfo("Đang đẩy code sang OnlineCompiler API...");
-            // TODO: Gọi API biên dịch
-            // TODO: Format code hoặc Phân tích lỗi
+            logInfo("Đang đẩy code sang Piston API...");
 
-            // Tạm thời tạo Dữ liệu giả (Mock) để test kết nối từ Client -> Server -> Client
-            Thread.sleep(1500); // Giả lập độ trễ mạng 1.5 giây
-            ResponsePayload response = new ResponsePayload(
-                    true,
-                    "Kết nối Server thành công!\nĐoạn code của bạn dài " + request.getSourceCode().length() + " ký tự.",
-                    "// Chỗ này sau này sẽ chứa code đã được format",
-                    null
-            );
+            com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI api = new com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI();
+            com.example.dt7syntaxcheck.server.services.SyntaxChecker checker = new com.example.dt7syntaxcheck.server.services.SyntaxChecker();
+            com.example.dt7syntaxcheck.server.services.CodeFormatter formatter = new com.example.dt7syntaxcheck.server.services.CodeFormatter();
 
+            ResponsePayload responsePayload;
+
+            try {
+                String apiResultJson = api.compileAndRun(request.getSourceCode(), request.getLanguageId());
+                org.json.JSONObject jsonResponse = new org.json.JSONObject(apiResultJson);
+
+                boolean isSuccess = true;
+                String output = "";
+                String errorOutput = "";
+
+                // Piston chia rạch ròi: "compile" cho lỗi biên dịch (C++, Java), "run" cho lỗi lúc chạy (Python, JS)
+                if (jsonResponse.has("compile") && jsonResponse.getJSONObject("compile").getInt("code") != 0) {
+                    isSuccess = false;
+                    errorOutput = jsonResponse.getJSONObject("compile").getString("stderr");
+                } else if (jsonResponse.getJSONObject("run").getInt("code") != 0) {
+                    isSuccess = false;
+                    errorOutput = jsonResponse.getJSONObject("run").getString("stderr");
+                } else {
+                    output = jsonResponse.getJSONObject("run").getString("stdout");
+                    if (output.trim().isEmpty()) {
+                        output = "Chương trình chạy xong nhưng không có output nào được in ra màn hình.";
+                    }
+                }
+
+                if (isSuccess) {
+                    // CODE ĐÚNG
+                    String formattedCode = formatter.formatCode(request.getSourceCode(), request.getLanguageId());
+                    responsePayload = new ResponsePayload(true, output, formattedCode, null);
+                    logInfo("Code chuẩn xác! Đã format và lấy output.");
+                } else {
+                    // CODE SAI LỖI
+                    java.util.List<com.example.dt7syntaxcheck.share.ErrorLog> errorLogs = checker.parseErrors(errorOutput, request.getLanguageId());
+                    responsePayload = new ResponsePayload(false, errorOutput, null, errorLogs);
+                    logInfo("Phát hiện lỗi! Đã bóc tách thành công.");
+                }
+
+            } catch (Exception e) {
+                logError("Sự cố khi gọi API Piston: " + e.getMessage());
+                responsePayload = new ResponsePayload(false, "Lỗi Server API: " + e.getMessage(), null, null);
+            }
             // ==========================================
             // TRẠM 4: ĐÓNG GÓI, MÃ HÓA VÀ TRẢ VỀ
             // ==========================================

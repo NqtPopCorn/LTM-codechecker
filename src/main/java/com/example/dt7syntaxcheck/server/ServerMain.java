@@ -13,7 +13,7 @@ public class ServerMain {
         System.out.println("=================================================");
         System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE   ");
         System.out.println("=================================================");
-        System.out.println("[INFO] Đang khởi động hệ thống...");
+        System.out.println("Đang khởi động hệ thống...");
 
         // Khởi tạo ServerSocket
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {

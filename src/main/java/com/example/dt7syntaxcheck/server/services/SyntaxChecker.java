@@ -49,11 +49,12 @@ public class SyntaxChecker {
                     }
                     break;
 
-                case 71: // Python
+                case 71: // Python (Bản cũ)
+                case 92: // Python 3.11 (Bản mới)
                     m = Pattern.compile("line (\\d+)").matcher(line);
                     if (m.find()) {
                         lineNumber = Integer.parseInt(m.group(1));
-                        errorMessage = extractPythonOrJsError(lines); // Gọi hàm trích xuất thông minh
+                        errorMessage = extractPythonOrJsError(lines);
                     }
                     break;
 

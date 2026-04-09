@@ -314,9 +314,9 @@ public class ClientUIFrame extends JFrame {
             case "JavaScript":
                 return 63;
             case "Python":
-                return 71;
+                return 92;
             default:
-                return 71;
+                return 92;
         }
     }
 

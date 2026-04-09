@@ -314,7 +314,7 @@ public class ClientUIFrame extends JFrame {
             case "JavaScript":
                 return 63;
             case "Python":
-                return 92;
+                return 92; // Mặc định dùng ID mới cho Python 3.11, nhưng Server sẽ chấp nhận cả 71 và 92
             default:
                 return 92;
         }

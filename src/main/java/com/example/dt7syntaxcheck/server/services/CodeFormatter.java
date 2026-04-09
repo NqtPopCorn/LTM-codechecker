@@ -1,49 +1,50 @@
 package com.example.dt7syntaxcheck.server.services;
 
-import okhttp3.*;
 import org.json.JSONObject;
+
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class CodeFormatter {
 
-    /**
-     * Hàm chính được gọi từ ClientHandler
-     */
     public String formatCode(String rawCode, int languageId) {
-        // Python (71) dùng khoảng trắng để thụt lề, không thể tự auto-format một cách an toàn bằng API này
         if (languageId == 71) {
-            return rawCode; 
+            return rawCode;
         }
 
-        // Chuyển ID ngôn ngữ sang tên ngôn ngữ
         String langName = "";
         switch (languageId) {
-            case 62: langName = "Java"; break;
-            case 54: langName = "C++"; break;
-            case 51: langName = "C#"; break;
-            case 63: langName = "JavaScript"; break;
+            case 62:
+                langName = "Java";
+                break;
+            case 54:
+                langName = "C++";
+                break;
+            case 51:
+                langName = "C#";
+                break;
+            case 63:
+                langName = "JavaScript";
+                break;
         }
 
-        // Gọi API Formatter
         return callFormatterAPI(rawCode, langName);
     }
 
-    /**
-     * Hàm gọi API bên thứ 3 (CodeBeautify) để format code chuẩn công nghiệp
-     */
     private String callFormatterAPI(String rawCode, String lang) {
         try {
             OkHttpClient client = new OkHttpClient();
-            
-            // Sử dụng API công khai của codebeautify
+
             String apiUrl = "https://codebeautify.org/api/format";
-            
-            // Map ngôn ngữ của chúng ta sang Mode mà API này hiểu
+
             String mode = "javascript";
             if (lang.equals("Java") || lang.equals("C++") || lang.equals("C#")) {
                 mode = "c_cpp";
             }
 
-            // Tạo Body HTTP POST
             RequestBody body = new FormBody.Builder()
                     .add("code", rawCode)
                     .add("mode", mode)
@@ -54,18 +55,19 @@ public class CodeFormatter {
                     .post(body)
                     .build();
 
-            // Thực thi Request
             try (Response response = client.newCall(request).execute()) {
                 if (response.isSuccessful() && response.body() != null) {
                     String respString = response.body().string();
-                    
-                    // Thử đọc dưới dạng JSON (Một số API trả về {"result": "code..."})
+
                     try {
                         JSONObject json = new JSONObject(respString);
-                        if (json.has("result")) return json.getString("result");
-                        if (json.has("formatted_code")) return json.getString("formatted_code");
+                        if (json.has("result")) {
+                            return json.getString("result");
+                        }
+                        if (json.has("formatted_code")) {
+                            return json.getString("formatted_code");
+                        }
                     } catch (Exception e) {
-                        // Nếu không phải JSON, nghĩa là nó trả thẳng đoạn code dưới dạng String trơn
                         return respString;
                     }
                 }
@@ -73,10 +75,38 @@ public class CodeFormatter {
         } catch (Exception e) {
             System.err.println("[WARNING] Lỗi gọi API Formatter, chuyển sang dùng Format Basic: " + e.getMessage());
         }
-        
-        // Nếu API sập hoặc mất mạng, gọi hàm backup (Fallback)
-        return formatCodeBasic(rawCode); 
+
+        return formatCodeBasic(rawCode);
     }
 
-  
+    // ĐÃ KHÔI PHỤC HÀM BACKUP DƯỚI ĐÂY
+    private String formatCodeBasic(String rawCode) {
+        StringBuilder formatted = new StringBuilder();
+        int indentLevel = 0;
+        String tab = "    ";
+
+        String cleanedCode = rawCode.replaceAll("\\s+", " ").replace("{", "{\n").replace("}", "}\n").replace(";", ";\n");
+        String[] lines = cleanedCode.split("\n");
+
+        for (String line : lines) {
+            line = line.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+
+            if (line.startsWith("}")) {
+                indentLevel = Math.max(0, indentLevel - 1);
+            }
+
+            for (int i = 0; i < indentLevel; i++) {
+                formatted.append(tab);
+            }
+            formatted.append(line).append("\n");
+
+            if (line.endsWith("{")) {
+                indentLevel++;
+            }
+        }
+        return formatted.toString();
+    }
 }

@@ -39,8 +39,7 @@ public class ClientUIFrame extends JFrame {
     private JComboBox<String> cbLanguage;
     private RSyntaxTextArea codeEditor;
     private JTextArea consoleOutput;
-    private JButton btnUpload, btnCheck, btnClear, btnThemeToggle;
-
+    private JButton btnUpload, btnCheck, btnClear, btnThemeToggle, btnFormat;
     private boolean isDarkMode = true;
 
     // Gọi lớp xử lý mạng và mã hóa
@@ -76,10 +75,13 @@ public class ClientUIFrame extends JFrame {
         btnClear = new JButton("🗑 Clear");
         btnThemeToggle = new JButton("☀️ Light Mode");
 
+        btnFormat = new JButton("🪄 Format Code");
+
         pnlToolbar.add(new JLabel("Ngôn ngữ:"));
         pnlToolbar.add(cbLanguage);
         pnlToolbar.add(btnUpload);
         pnlToolbar.add(Box.createHorizontalStrut(10));
+        pnlToolbar.add(btnFormat); // Thêm nút Format vào đây
         pnlToolbar.add(btnCheck);
         pnlToolbar.add(btnClear);
         pnlToolbar.add(Box.createHorizontalStrut(30));
@@ -111,8 +113,9 @@ public class ClientUIFrame extends JFrame {
         ((JPanel) getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // =========================================================
-        // GẮN SỰ KIỆN CHO CÁC NÚT BẤM (ĐÂY LÀ PHẦN ĐÃ KHẮC PHỤC LỖI)
+        // GẮN SỰ KIỆN CHO CÁC NÚT BẤM 
         // =========================================================
+        btnFormat.addActionListener(e -> handleFormatCode());
         btnUpload.addActionListener(e -> handleUploadFile());
         btnClear.addActionListener(e -> handleClear());
         btnCheck.addActionListener(e -> handleCheckCode());
@@ -146,6 +149,55 @@ public class ClientUIFrame extends JFrame {
     private void handleClear() {
         codeEditor.setText("");
         consoleOutput.setText("");
+    }
+
+    private void handleFormatCode() {
+        String code = codeEditor.getText();
+        if (code.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập code trước khi định dạng!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String selectedLang = (String) cbLanguage.getSelectedItem();
+        int langId = getLanguageId(selectedLang);
+
+        consoleOutput.setText("Đang gửi yêu cầu Format code (" + selectedLang + ") lên Server...\n");
+        btnFormat.setEnabled(false);
+        btnCheck.setEnabled(false); // Khóa cả 2 nút tránh spam
+
+        // Gửi payload với cờ isFormatOnly = true
+        RequestPayload payload = new RequestPayload(code, langId, true);
+
+        SwingWorker<ResponsePayload, Void> worker = new SwingWorker<>() {
+            @Override
+            protected ResponsePayload doInBackground() throws Exception {
+                return clientService.sendCodeToServer(payload);
+            }
+
+            @Override
+            protected void done() {
+                btnFormat.setEnabled(true);
+                btnCheck.setEnabled(true);
+                try {
+                    ResponsePayload response = get();
+
+                    if (response.isSuccess()) {
+                        String formatted = response.getFormattedCode();
+                        if (formatted != null && !formatted.isEmpty()) {
+                            codeEditor.setText(formatted);
+                            consoleOutput.append("\n[✓] Đã định dạng code thành công!");
+                        } else {
+                            consoleOutput.append("\n[!] Không có thay đổi nào hoặc ngôn ngữ không hỗ trợ.");
+                        }
+                    } else {
+                        consoleOutput.append("\n[LỖI FORMAT]: " + response.getOutput());
+                    }
+                } catch (Exception e) {
+                    consoleOutput.append("\n[LỖI KẾT NỐI]: " + e.getMessage());
+                }
+            }
+        };
+        worker.execute();
     }
 
     private void handleUploadFile() {

@@ -11,7 +11,7 @@ public class ServerMain {
 
     public static void main(String[] args) {
         System.out.println("=================================================");
-        System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE (ĐỀ TÀI 7)   ");
+        System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE   ");
         System.out.println("=================================================");
         System.out.println("[INFO] Đang khởi động hệ thống...");
 

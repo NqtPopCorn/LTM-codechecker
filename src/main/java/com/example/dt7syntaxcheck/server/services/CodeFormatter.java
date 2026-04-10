@@ -1,12 +1,12 @@
 package com.example.dt7syntaxcheck.server.services;
 
-import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import org.json.JSONObject;
 
 public class CodeFormatter {
 
@@ -18,12 +18,10 @@ public class CodeFormatter {
             case 54: // C++
             case 51: // C#
             case 63: // JavaScript
-                // Cả 4 ngôn ngữ này đều được hỗ trợ cực tốt bởi công cụ clangformat của Godbolt
                 formatter = "clangformat";
                 break;
             case 71:
             case 92: // Python
-                // Máy chủ Godbolt không cài đặt tool cho Python, ta giữ nguyên code để tránh báo lỗi
                 return rawCode;
             default:
                 return rawCode;
@@ -36,49 +34,58 @@ public class CodeFormatter {
         String errorComment = "// [SERVER WARNING]: ";
 
         try {
-            OkHttpClient client = new OkHttpClient();
+            // Khởi tạo kết nối mạng nguyên bản bằng HttpURLConnection
+            URL url = new URL("https://godbolt.org/api/format/" + formatter);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
-            // Endpoint chuẩn của Godbolt
-            String apiUrl = "https://godbolt.org/api/format/" + formatter;
+            // ÉP BUỘC HEADER CHUẨN XÁC TUYỆT ĐỐI (Không cho phép ai tự động chèn charset)
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 LTM-CodeChecker/1.0");
+            conn.setDoOutput(true);
 
             // Đóng gói JSON
             JSONObject jsonPayload = new JSONObject();
             jsonPayload.put("source", rawCode);
-            jsonPayload.put("base", "Google"); // Bắt buộc phải khai báo style định dạng
+            jsonPayload.put("base", "Google");
 
-            // Tạo RequestBody 
-            RequestBody body = RequestBody.create(
-                    jsonPayload.toString(),
-                    MediaType.parse("application/json; charset=utf-8")
-            );
-
-            // Gắn Request
-            Request request = new Request.Builder()
-                    .url(apiUrl)
-                    .post(body)
-                    // ĐÂY LÀ DÒNG QUAN TRỌNG NHẤT LÀM NÊN SỰ KHÁC BIỆT:
-                    // Ép buộc ghi đè Header để Godbolt không báo lỗi "expected json content" nữa
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Accept", "application/json")
-                    .addHeader("User-Agent", "Mozilla/5.0 LTM-CodeChecker/1.0")
-                    .build();
-
-            try (Response response = client.newCall(request).execute()) {
-                String respString = response.body() != null ? response.body().string() : "";
-
-                if (response.isSuccessful()) {
-                    JSONObject json = new JSONObject(respString);
-                    if (json.has("answer")) {
-                        return json.getString("answer");
-                    }
-                } else {
-                    System.err.println("[WARNING] API báo lỗi " + response.code() + " - Chi tiết: " + respString);
-                    return errorComment + "Lỗi API (" + response.code() + ") Chi tiết: " + respString.replace("\n", " ") + "\n" + rawCode;
-                }
+            // Viết dữ liệu vào luồng để gửi đi
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonPayload.toString().getBytes("utf-8");
+                os.write(input, 0, input.length);
             }
+
+            int responseCode = conn.getResponseCode();
+
+            // Đọc phản hồi (Thành công đọc luồng Input, Thất bại đọc luồng Error)
+            BufferedReader br;
+            if (responseCode >= 200 && responseCode < 300) {
+                br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"));
+            } else {
+                br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"));
+            }
+
+            StringBuilder response = new StringBuilder();
+            String responseLine;
+            while ((responseLine = br.readLine()) != null) {
+                response.append(responseLine.trim());
+            }
+
+            // Xử lý JSON trả về
+            if (responseCode == 200) {
+                JSONObject json = new JSONObject(response.toString());
+                if (json.has("answer")) {
+                    return json.getString("answer");
+                }
+            } else {
+                System.err.println("[WARNING] API báo lỗi " + responseCode + " - Chi tiết: " + response.toString());
+                return errorComment + "Lỗi API (" + responseCode + ") Chi tiết: " + response.toString().replace("\n", " ") + "\n" + rawCode;
+            }
+
         } catch (Exception e) {
             System.err.println("[ERROR] Lỗi mạng khi kết nối Godbolt: " + e.getMessage());
-            return errorComment + "Sự cố mạng nội bộ Server khi gọi API định dạng.\n" + rawCode;
+            return errorComment + "Sự cố mạng nội bộ Server khi gọi API.\n" + rawCode;
         }
 
         return rawCode;

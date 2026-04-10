@@ -36,13 +36,14 @@ public class OnlineCompilerAPI {
 
         RequestBody body = RequestBody.create(
                 jsonPayload.toString(),
-                MediaType.parse("application/json; charset=utf-8")
+                MediaType.parse("application/json")
         );
 
         Request request = new Request.Builder()
                 .url(API_URL)
                 .post(body)
                 .addHeader("content-type", "application/json")
+                .addHeader("accept", "application/json")
                 .addHeader("X-RapidAPI-Key", API_KEY)
                 .addHeader("X-RapidAPI-Host", API_HOST)
                 .build();

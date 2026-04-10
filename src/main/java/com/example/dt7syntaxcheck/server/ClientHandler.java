@@ -39,24 +39,15 @@ public class ClientHandler extends Thread {
 
             logInfo("Luồng xử lý đã mở. Đang chờ Client gửi dữ liệu...");
 
-            // ==========================================
-            // TRẠM 1: NHẬN VÀ GIẢI MÃ
-            // ==========================================
             String encryptedRequest = in.readLine();
             if (encryptedRequest == null) {
-                logInfo("Client đã ngắt kết nối trước khi gửi dữ liệu.");
+                logInfo("Client đã ngắt kết nối.");
                 return;
             }
-            logInfo("Đã nhận được gói tin mã hóa. Tiến hành giải mã...");
 
             String decryptedJson = cryptoManager.decrypt(encryptedRequest);
             RequestPayload request = gson.fromJson(decryptedJson, RequestPayload.class);
-            logInfo("Giải mã thành công! Nhận code thuộc Ngôn ngữ ID: " + request.getLanguageId());
-
-            // ==========================================
-            // TRẠM 2 + 3: GỌI API & XỬ LÝ (CHUẨN JUDGE0)
-            // ==========================================
-            logInfo("Đang đẩy code sang Judge0 API...");
+            logInfo("Đã nhận code Ngôn ngữ ID: " + request.getLanguageId() + " | Chỉ Format: " + request.isFormatOnly());
 
             com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI api = new com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI();
             com.example.dt7syntaxcheck.server.services.SyntaxChecker checker = new com.example.dt7syntaxcheck.server.services.SyntaxChecker();
@@ -65,58 +56,57 @@ public class ClientHandler extends Thread {
             ResponsePayload responsePayload;
 
             try {
-                // 1. Gọi Judge0 API
-                String apiResultJson = api.compileAndRun(request.getSourceCode(), request.getLanguageId());
-                org.json.JSONObject jsonResponse = new org.json.JSONObject(apiResultJson);
-
-                // 2. Judge0 quy định status ID = 3 là code chạy thành công hoàn toàn
-                int statusId = jsonResponse.getJSONObject("status").getInt("id");
-
-                if (statusId == 3) {
-                    // --- CODE ĐÚNG SYNTAX ---
-                    String output = jsonResponse.optString("stdout", "Chương trình chạy xong nhưng không in ra kết quả (output rỗng).");
+                // ĐỒNG BỘ: KIỂM TRA RẼ NHÁNH TỪ CLIENT YÊU CẦU
+                if (request.isFormatOnly()) {
+                    // YÊU CẦU 1: CHỈ ĐỊNH DẠNG CODE
+                    logInfo("Chuyển code sang API CodeBeautify để Format...");
                     String formattedCode = formatter.formatCode(request.getSourceCode(), request.getLanguageId());
+                    responsePayload = new ResponsePayload(true, "Đã định dạng code thành công!", formattedCode, null);
 
-                    responsePayload = new ResponsePayload(true, output, formattedCode, null);
-                    logInfo("Code chuẩn xác! Đã format và lấy output.");
                 } else {
-                    // --- CODE SAI SYNTAX HOẶC LỖI RUNTIME ---
-                    String errorOutput = jsonResponse.optString("compile_output", "");
-                    if (errorOutput.isEmpty()) {
-                        errorOutput = jsonResponse.optString("stderr", "Lỗi Runtime hoặc lỗi không xác định từ API.");
+                    // YÊU CẦU 2: BIÊN DỊCH VÀ CHẠY CODE BẰNG JUDGE0
+                    logInfo("Đang đẩy code sang Judge0 API...");
+                    String apiResultJson = api.compileAndRun(request.getSourceCode(), request.getLanguageId());
+                    org.json.JSONObject jsonResponse = new org.json.JSONObject(apiResultJson);
+
+                    int statusId = jsonResponse.getJSONObject("status").getInt("id");
+
+                    if (statusId == 3) {
+                        // NẾU CODE ĐÚNG -> LẤY OUTPUT -> RỒI GỌI FORMATTER LÀM ĐẸP
+                        String output = jsonResponse.optString("stdout", "Chương trình chạy xong (không in output).");
+                        String formattedCode = formatter.formatCode(request.getSourceCode(), request.getLanguageId());
+                        responsePayload = new ResponsePayload(true, output, formattedCode, null);
+                        logInfo("Code chuẩn xác! Đã format và lấy output.");
+                    } else {
+                        // NẾU CODE LỖI -> KHÔNG FORMAT NỮA -> BÓC TÁCH LỖI
+                        String errorOutput = jsonResponse.optString("compile_output", "");
+                        if (errorOutput.isEmpty()) {
+                            errorOutput = jsonResponse.optString("stderr", "Lỗi Runtime hoặc API.");
+                        }
+
+                        java.util.List<com.example.dt7syntaxcheck.share.ErrorLog> errorLogs = checker.parseErrors(errorOutput, request.getLanguageId());
+                        responsePayload = new ResponsePayload(false, errorOutput, null, errorLogs);
+                        logInfo("Phát hiện lỗi cú pháp! Đã bóc tách.");
                     }
-
-                    // Phân tích bóc tách dòng lỗi
-                    java.util.List<com.example.dt7syntaxcheck.share.ErrorLog> errorLogs = checker.parseErrors(errorOutput, request.getLanguageId());
-
-                    responsePayload = new ResponsePayload(false, errorOutput, null, errorLogs);
-                    logInfo("Phát hiện lỗi cú pháp! Đã bóc tách thành công.");
                 }
 
             } catch (Exception e) {
-                logError("Sự cố khi xử lý kết quả từ Judge0: " + e.getMessage());
+                logError("Sự cố khi xử lý Server: " + e.getMessage());
                 responsePayload = new ResponsePayload(false, "Lỗi Server API: " + e.getMessage(), null, null);
             }
 
-            // ==========================================
-            // TRẠM 4: ĐÓNG GÓI, MÃ HÓA VÀ TRẢ VỀ
-            // ==========================================
-            logInfo("Đã có kết quả. Đang mã hóa và gửi trả Client...");
+            // GỬI PHẢN HỒI MÃ HÓA VỀ LẠI CLIENT
             String responseJson = gson.toJson(responsePayload);
             String encryptedResponse = cryptoManager.encrypt(responseJson);
-
             out.println(encryptedResponse);
-            logInfo("Đã gửi thành công!");
+            logInfo("Đã trả kết quả về Client!\n");
 
         } catch (Exception e) {
             logError("Sự cố gián đoạn luồng: " + e.getMessage());
-            e.printStackTrace();
         } finally {
             try {
                 socket.close();
-                logInfo("Đã đóng Socket và giải phóng tài nguyên luồng.\n");
             } catch (Exception e) {
-                logError("Lỗi khi đóng Socket: " + e.getMessage());
             }
         }
     }

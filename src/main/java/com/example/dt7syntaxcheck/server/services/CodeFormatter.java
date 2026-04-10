@@ -1,84 +1,93 @@
 package com.example.dt7syntaxcheck.server.services;
 
-import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
-import okhttp3.FormBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import org.json.JSONObject;
 
 public class CodeFormatter {
 
     public String formatCode(String rawCode, int languageId) {
-        String mode = "javascript"; // Mặc định
+        String formatter;
 
-        // Ánh xạ chính xác ID ngôn ngữ sang Mode của API CodeBeautify
         switch (languageId) {
             case 62: // Java
-                mode = "java";
-                break;
             case 54: // C++
-                mode = "c_cpp";
-                break;
             case 51: // C#
-                mode = "csharp";
-                break;
             case 63: // JavaScript
-                mode = "javascript";
+                formatter = "clangformat";
                 break;
-            case 71: // Python (Bản cũ)
-            case 92: // Python 3.11 (Bản mới)
-                mode = "python";
-                break;
+            case 71:
+            case 92: // Python
+                return rawCode;
             default:
-                return rawCode; // Nếu ngôn ngữ lạ, trả về code gốc
+                return rawCode;
         }
 
-        return callFormatterAPI(rawCode, mode, languageId);
+        return callGodboltAPI(rawCode, formatter, languageId);
     }
 
-    private String callFormatterAPI(String rawCode, String mode, int languageId) {
+    private String callGodboltAPI(String rawCode, String formatter, int languageId) {
+        String errorComment = "// [SERVER WARNING]: ";
+
         try {
-            OkHttpClient client = new OkHttpClient();
+            // Khởi tạo kết nối mạng nguyên bản bằng HttpURLConnection
+            URL url = new URL("https://godbolt.org/api/format/" + formatter);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
-            // Sử dụng API định dạng chuẩn
-            String apiUrl = "https://codebeautify.org/api/format";
+            // ÉP BUỘC HEADER CHUẨN XÁC TUYỆT ĐỐI (Không cho phép ai tự động chèn charset)
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 LTM-CodeChecker/1.0");
+            conn.setDoOutput(true);
 
-            RequestBody body = new FormBody.Builder()
-                    .add("code", rawCode)
-                    .add("mode", mode)
-                    .build();
+            // Đóng gói JSON
+            JSONObject jsonPayload = new JSONObject();
+            jsonPayload.put("source", rawCode);
+            jsonPayload.put("base", "Google");
 
-            Request request = new Request.Builder()
-                    .url(apiUrl)
-                    .post(body)
-                    .build();
-
-            try (Response response = client.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String respString = response.body().string();
-
-                    try {
-                        JSONObject json = new JSONObject(respString);
-                        // Tùy theo ngôn ngữ mà API trả về khóa result hoặc formatted_code
-                        if (json.has("result")) {
-                            return json.getString("result");
-                        }
-                        if (json.has("formatted_code")) {
-                            return json.getString("formatted_code");
-                        }
-                    } catch (Exception e) {
-                        // Nếu dữ liệu trả về không phải JSON mà là String trơn
-                        return respString;
-                    }
-                }
+            // Viết dữ liệu vào luồng để gửi đi
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonPayload.toString().getBytes("utf-8");
+                os.write(input, 0, input.length);
             }
+
+            int responseCode = conn.getResponseCode();
+
+            // Đọc phản hồi (Thành công đọc luồng Input, Thất bại đọc luồng Error)
+            BufferedReader br;
+            if (responseCode >= 200 && responseCode < 300) {
+                br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"));
+            } else {
+                br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"));
+            }
+
+            StringBuilder response = new StringBuilder();
+            String responseLine;
+            while ((responseLine = br.readLine()) != null) {
+                response.append(responseLine.trim());
+            }
+
+            // Xử lý JSON trả về
+            if (responseCode == 200) {
+                JSONObject json = new JSONObject(response.toString());
+                if (json.has("answer")) {
+                    return json.getString("answer");
+                }
+            } else {
+                System.err.println("[WARNING] API báo lỗi " + responseCode + " - Chi tiết: " + response.toString());
+                return errorComment + "Lỗi API (" + responseCode + ") Chi tiết: " + response.toString().replace("\n", " ") + "\n" + rawCode;
+            }
+
         } catch (Exception e) {
-            System.err.println("[WARNING] Lỗi gọi API Formatter, trả về code gốc: " + e.getMessage());
+            System.err.println("[ERROR] Lỗi mạng khi kết nối Godbolt: " + e.getMessage());
+            return errorComment + "Sự cố mạng nội bộ Server khi gọi API.\n" + rawCode;
         }
 
-        // Nếu API sập, trả về code gốc
         return rawCode;
     }
 }

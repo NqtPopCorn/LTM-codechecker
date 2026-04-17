@@ -41,9 +41,7 @@ public class ServerMain {
                 int clientPort = clientSocket.getPort();
                 System.out.println("[+] Phát hiện Client mới kết nối từ: " + clientIP + ":" + clientPort);
 
-                // Kỹ thuật Multithread: 
-                // Giao ngay socket của Client vừa kết nối cho một luồng (Thread) ClientHandler xử lý.
-                // Luồng chính (ServerMain) lập tức quay lại vòng lặp while để đón người tiếp theo.
+                // Multithread: Giao socket cho ClientHandler, MainThread tiếp tục đón client khác
                 ClientHandler clientHandler = new ClientHandler(clientSocket, rsaKeyPair);
                 clientHandler.start();
             }

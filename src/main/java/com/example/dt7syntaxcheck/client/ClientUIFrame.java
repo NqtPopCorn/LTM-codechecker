@@ -52,7 +52,7 @@ public class ClientUIFrame extends JFrame {
             System.err.println("Failed to initialize LaF");
         }
 
-        setTitle("Ứng Dụng Kiểm Tra & Thực Thi Code - Đề Tài 7");
+        setTitle("Ứng Dụng Kiểm Tra & Thực Thi Code");
         setSize(950, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -151,22 +151,25 @@ public class ClientUIFrame extends JFrame {
         consoleOutput.setText("");
     }
 
-    private void handleFormatCode() {
+    private void sendCodeRequest(boolean isFormatOnly) {
         String code = codeEditor.getText();
         if (code.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập code trước khi định dạng!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            String message = isFormatOnly
+                    ? "Vui lòng nhập code trước khi định dạng!"
+                    : "Vui lòng nhập code hoặc upload file trước khi kiểm tra!";
+            JOptionPane.showMessageDialog(this, message, "Thông báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         String selectedLang = (String) cbLanguage.getSelectedItem();
         int langId = getLanguageId(selectedLang);
 
-        consoleOutput.setText("Đang gửi yêu cầu Format code (" + selectedLang + ") lên Server...\n");
-        btnFormat.setEnabled(false);
-        btnCheck.setEnabled(false); // Khóa cả 2 nút tránh spam
+        consoleOutput.setText("Đang " + (isFormatOnly ? "định dạng" : "mã hóa và gửi") + " code (" + selectedLang + ") lên Server...\n");
 
-        // Gửi payload với cờ isFormatOnly = true
-        RequestPayload payload = new RequestPayload(code, langId, true);
+        btnFormat.setEnabled(false);
+        btnCheck.setEnabled(false);
+
+        RequestPayload payload = new RequestPayload(code, langId, isFormatOnly);
 
         SwingWorker<ResponsePayload, Void> worker = new SwingWorker<>() {
             @Override
@@ -181,23 +184,54 @@ public class ClientUIFrame extends JFrame {
                 try {
                     ResponsePayload response = get();
 
-                    if (response.isSuccess()) {
-                        String formatted = response.getFormattedCode();
-                        if (formatted != null && !formatted.isEmpty()) {
-                            codeEditor.setText(formatted);
-                            consoleOutput.append("\n[✓] Đã định dạng code thành công!");
+                    if (isFormatOnly) {
+                        // ---- XỬ LÝ RESPONSE CHO FORMAT ----
+                        if (response.isSuccess()) {
+                            String formatted = response.getFormattedCode();
+                            if (formatted != null && !formatted.isEmpty()) {
+                                codeEditor.setText(formatted);
+                                consoleOutput.append("\n[✓] Đã định dạng code thành công!");
+                            } else {
+                                consoleOutput.append("\n[!] Không có thay đổi nào hoặc ngôn ngữ không hỗ trợ.");
+                            }
                         } else {
-                            consoleOutput.append("\n[!] Không có thay đổi nào hoặc ngôn ngữ không hỗ trợ.");
+                            consoleOutput.append("\n[LỖI FORMAT]: " + response.getOutput());
                         }
                     } else {
-                        consoleOutput.append("\n[LỖI FORMAT]: " + response.getOutput());
+                        // ---- XỬ LÝ RESPONSE CHO CHECK & RUN ----
+                        if (response.isSuccess()) {
+                            consoleOutput.append("\n=== KẾT QUẢ CHẠY THÀNH CÔNG ===\n");
+                            consoleOutput.append(response.getOutput());
+
+                            String formatted = response.getFormattedCode();
+                            if (formatted != null && !formatted.isEmpty()) {
+                                codeEditor.setText(formatted);
+                                consoleOutput.append("\n\n[Hệ thống đã tự động Format lại code của bạn theo chuẩn]");
+                            }
+                        } else {
+                            consoleOutput.append("\n=== PHÁT HIỆN LỖI CÚ PHÁP ===\n");
+                            if (response.getErrors() != null && !response.getErrors().isEmpty()) {
+                                for (var error : response.getErrors()) {
+                                    consoleOutput.append("-> Dòng " + error.getLine() + ": " + error.getMessage() + "\n");
+                                }
+                            } else {
+                                consoleOutput.append(response.getOutput());
+                            }
+                        }
                     }
                 } catch (Exception e) {
                     consoleOutput.append("\n[LỖI KẾT NỐI]: " + e.getMessage());
+                    if (!isFormatOnly) {
+                        consoleOutput.append("\nHãy đảm bảo Server đang chạy ở port 5000!");
+                    }
                 }
             }
         };
         worker.execute();
+    }
+
+    private void handleFormatCode() {
+        sendCodeRequest(true);
     }
 
     private void handleUploadFile() {
@@ -218,58 +252,7 @@ public class ClientUIFrame extends JFrame {
     }
 
     private void handleCheckCode() {
-        String code = codeEditor.getText();
-        if (code.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập code hoặc upload file trước khi kiểm tra!", "Thông báo", JOptionPane.WARNING_MESSAGE);
-            return; // Dừng lại, không gửi lên Server
-        }
-
-        String selectedLang = (String) cbLanguage.getSelectedItem();
-        int langId = getLanguageId(selectedLang);
-
-        consoleOutput.setText("Đang mã hóa và gửi code (" + selectedLang + ") lên Server...\n");
-        btnCheck.setEnabled(false);
-
-        RequestPayload payload = new RequestPayload(code, langId);
-
-        SwingWorker<ResponsePayload, Void> worker = new SwingWorker<>() {
-            @Override
-            protected ResponsePayload doInBackground() throws Exception {
-                return clientService.sendCodeToServer(payload);
-            }
-
-            @Override
-            protected void done() {
-                btnCheck.setEnabled(true);
-                try {
-                    ResponsePayload response = get();
-
-                    if (response.isSuccess()) {
-                        consoleOutput.append("\n=== KẾT QUẢ CHẠY THÀNH CÔNG ===\n");
-                        consoleOutput.append(response.getOutput());
-
-                        String formatted = response.getFormattedCode();
-                        if (formatted != null && !formatted.isEmpty()) {
-                            codeEditor.setText(formatted);
-                            consoleOutput.append("\n\n[Hệ thống đã tự động Format lại code của bạn theo chuẩn]");
-                        }
-                    } else {
-                        consoleOutput.append("\n=== PHÁT HIỆN LỖI CÚ PHÁP ===\n");
-                        if (response.getErrors() != null && !response.getErrors().isEmpty()) {
-                            for (var error : response.getErrors()) {
-                                consoleOutput.append("-> Dòng " + error.getLine() + ": " + error.getMessage() + "\n");
-                            }
-                        } else {
-                            consoleOutput.append(response.getOutput());
-                        }
-                    }
-                } catch (Exception e) {
-                    consoleOutput.append("\n[LỖI KẾT NỐI]: " + e.getMessage());
-                    consoleOutput.append("\nHãy đảm bảo Server đang chạy ở port 5000!");
-                }
-            }
-        };
-        worker.execute();
+        sendCodeRequest(false);
     }
 
     private void toggleTheme() {

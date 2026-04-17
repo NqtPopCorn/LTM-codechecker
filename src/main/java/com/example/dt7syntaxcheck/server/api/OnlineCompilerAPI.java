@@ -1,7 +1,7 @@
 package com.example.dt7syntaxcheck.server.api;
 
 import java.io.IOException;
-import java.util.Base64; // Thêm thư viện Base64
+import java.util.Base64;
 
 import org.json.JSONObject;
 
@@ -29,21 +29,20 @@ public class OnlineCompilerAPI {
     public String compileAndRun(String sourceCode, int languageId) throws IOException {
         JSONObject jsonPayload = new JSONObject();
 
-        // 2. Mã hóa code của Client sang Base64 trước khi nhét vào JSON gửi đi
+        // 2. Mã hóa code của Client sang Base64 trước khi gửi đi
         String encodedCode = Base64.getEncoder().encodeToString(sourceCode.getBytes("UTF-8"));
         jsonPayload.put("source_code", encodedCode);
         jsonPayload.put("language_id", languageId);
 
         RequestBody body = RequestBody.create(
                 jsonPayload.toString(),
-                MediaType.parse("application/json")
+                MediaType.parse("application/json; charset=utf-8")
         );
 
         Request request = new Request.Builder()
                 .url(API_URL)
                 .post(body)
                 .addHeader("content-type", "application/json")
-                .addHeader("accept", "application/json")
                 .addHeader("X-RapidAPI-Key", API_KEY)
                 .addHeader("X-RapidAPI-Host", API_HOST)
                 .build();
@@ -56,7 +55,6 @@ public class OnlineCompilerAPI {
             }
 
             // 3. Dịch ngược kết quả Base64 từ Judge0 về lại String bình thường
-            // Làm bước này tại đây giúp ClientHandler và SyntaxChecker không cần thay đổi bất cứ code nào!
             try {
                 JSONObject jsonResponse = new JSONObject(responseBody);
                 decodeJsonField(jsonResponse, "stdout");

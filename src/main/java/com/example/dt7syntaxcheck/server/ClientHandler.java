@@ -5,7 +5,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
-import com.example.dt7syntaxcheck.share.CryptoManager;
+import com.example.dt7syntaxcheck.share.HybridCryptoManager;
 import com.example.dt7syntaxcheck.share.RequestPayload;
 import com.example.dt7syntaxcheck.share.ResponsePayload;
 import com.google.gson.Gson;
@@ -14,13 +14,18 @@ public class ClientHandler extends Thread {
 
     private Socket socket;
     private Gson gson;
-    private CryptoManager cryptoManager;
+    private HybridCryptoManager hybridCryptoManager;
     private String clientIPPrefix;
+    private String publicKeyForClient;
+    private String privateKeyForServer;
 
-    public ClientHandler(Socket socket) {
+    public ClientHandler(Socket socket, KeyManager.RSAKeyPair rsaKeyPair) {
         this.socket = socket;
         this.gson = new Gson();
-        this.cryptoManager = new CryptoManager("MySecretKey123456");
+        this.publicKeyForClient = rsaKeyPair.publicKey;
+        this.privateKeyForServer = rsaKeyPair.privateKey;
+        // Khởi tạo HybridCryptoManager với cả public và private key
+        this.hybridCryptoManager = new HybridCryptoManager(publicKeyForClient, privateKeyForServer);
         this.clientIPPrefix = "[" + socket.getInetAddress().getHostAddress() + ":" + socket.getPort() + "] ";
     }
 
@@ -37,17 +42,36 @@ public class ClientHandler extends Thread {
         try (
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream())); PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
-            logInfo("Luồng xử lý đã mở. Đang chờ Client gửi dữ liệu...");
+            logInfo("Luồng xử lý đã mở. Thực hiện Key Exchange...");
 
-            String encryptedRequest = in.readLine();
-            if (encryptedRequest == null) {
+            // ============================================
+            // BƯỚC 1: HANDSHAKE - GỬI PUBLIC KEY CHO CLIENT
+            // ============================================
+            out.println(publicKeyForClient);
+            logInfo("Đã gửi Public Key cho Client.");
+
+            // ============================================
+            // BƯỚC 2: NHẬN YÊU CẦU HYBRID ENCRYPTED TỪ CLIENT
+            // ============================================
+            String encryptedSessionKey = in.readLine();
+            String encryptedData = in.readLine();
+
+            if (encryptedSessionKey == null || encryptedData == null) {
                 logInfo("Client đã ngắt kết nối.");
                 return;
             }
 
-            String decryptedJson = cryptoManager.decrypt(encryptedRequest);
+            // Tạo đối tượng HybridEncryptedMessage từ dữ liệu nhận được
+            HybridCryptoManager.HybridEncryptedMessage encryptedMessage
+                    = new HybridCryptoManager.HybridEncryptedMessage(encryptedSessionKey, encryptedData);
+
+            // Giải mã hybrid (giải mã RSA key -> giải mã AES data)
+            String decryptedJson = hybridCryptoManager.decryptHybrid(encryptedMessage);
             RequestPayload request = gson.fromJson(decryptedJson, RequestPayload.class);
-            logInfo("Đã nhận code Ngôn ngữ ID: " + request.getLanguageId() + " | Chỉ Format: " + request.isFormatOnly());
+            logInfo("✓ Giải mã Hybrid thành công! Ngôn ngữ ID: " + request.getLanguageId() + " | Chỉ Format: " + request.isFormatOnly());
+
+            // Lưu session key AES từ request để dùng lại cho response
+            javax.crypto.SecretKey sessionKey = hybridCryptoManager.decryptSessionKey(encryptedSessionKey);
 
             com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI api = new com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI();
             com.example.dt7syntaxcheck.server.services.SyntaxChecker checker = new com.example.dt7syntaxcheck.server.services.SyntaxChecker();
@@ -95,11 +119,16 @@ public class ClientHandler extends Thread {
                 responsePayload = new ResponsePayload(false, "Lỗi Server API: " + e.getMessage(), null, null);
             }
 
-            // GỬI PHẢN HỒI MÃ HÓA VỀ LẠI CLIENT
+            // ============================================
+            // BƯỚC 3: GỬI PHẢN HỒI ENCRYPTED VỀ CLIENT
+            // (Gửi lại encrypted session key cũ + encrypted data bằng AES)
+            // ============================================
             String responseJson = gson.toJson(responsePayload);
-            String encryptedResponse = cryptoManager.encrypt(responseJson);
-            out.println(encryptedResponse);
-            logInfo("Đã trả kết quả về Client!\n");
+            String encryptedResponseData = hybridCryptoManager.encryptDataWithAES(responseJson, sessionKey);
+            // Gửi response: encrypted session key (cũ) + encrypted data (AES)
+            out.println(encryptedSessionKey);  // Gửi lại session key từ request
+            out.println(encryptedResponseData);
+            logInfo("✓ Đã mã hóa AES và gửi response về Client!\n");
 
         } catch (Exception e) {
             logError("Sự cố gián đoạn luồng: " + e.getMessage());

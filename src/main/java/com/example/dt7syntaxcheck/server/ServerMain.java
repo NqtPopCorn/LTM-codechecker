@@ -5,6 +5,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 import com.example.dt7syntaxcheck.server.KeyManager.RSAKeyPairs;
+import com.example.dt7syntaxcheck.server.services.JSONBinRegistrar;
 
 public class ServerMain {
 
@@ -20,6 +21,14 @@ public class ServerMain {
         System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE   ");
         System.out.println("=================================================");
         System.out.println("Đang khởi động hệ thống...");
+
+        // Đăng ký lên JSONBin
+        try {
+            new JSONBinRegistrar().register(PORT);
+        } catch (Exception e) {
+            System.err.print("[ERROR] Đăng kí thông tin server lên JSONBin thất bại");
+        }
+        System.out.println("[INFO] Đã đăng kí lên JSONBin thành công!\n");
 
         // Khởi tạo RSA keys cho mã hóa lai
         try {

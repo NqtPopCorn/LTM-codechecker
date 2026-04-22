@@ -12,8 +12,8 @@ import com.google.gson.Gson;
 
 public class ClientService {
 
-    private static final String SERVER_IP = "localhost";
-    private static final int SERVER_PORT = 5000;
+    private String SERVER_IP = "localhost";
+    private int SERVER_PORT = 5000;
 
     private HybridCryptoManager hybridCryptoManager;
     private Gson gson;
@@ -21,6 +21,15 @@ public class ClientService {
 
     public ClientService() {
         this.gson = new Gson();
+        try {
+            // Tìm server qua JSONBin rồi kết nối TCP
+            String serverAddress = new JSONBinFinder().findServerAddress();
+            this.SERVER_IP = serverAddress.split(":")[0];
+            this.SERVER_PORT = Integer.parseInt(serverAddress.split(":")[1]);
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("[Client] Không thể kết nối: " + e.getMessage());
+        }
     }
 
     /**

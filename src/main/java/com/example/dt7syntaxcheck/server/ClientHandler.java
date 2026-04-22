@@ -5,6 +5,9 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+import com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI;
+import com.example.dt7syntaxcheck.server.services.CodeFormatter;
+import com.example.dt7syntaxcheck.server.services.SyntaxChecker;
 import com.example.dt7syntaxcheck.share.CryptoManager;
 import com.example.dt7syntaxcheck.share.RequestPayload;
 import com.example.dt7syntaxcheck.share.ResponsePayload;
@@ -35,7 +38,8 @@ public class ClientHandler extends Thread {
     @Override
     public void run() {
         try (
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream())); PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
             logInfo("Luồng xử lý đã mở. Đang chờ Client gửi dữ liệu...");
 
@@ -47,11 +51,12 @@ public class ClientHandler extends Thread {
 
             String decryptedJson = cryptoManager.decrypt(encryptedRequest);
             RequestPayload request = gson.fromJson(decryptedJson, RequestPayload.class);
-            logInfo("Đã nhận code Ngôn ngữ ID: " + request.getLanguageId() + " | Chỉ Format: " + request.isFormatOnly());
+            logInfo("Đã nhận code Ngôn ngữ ID: " + request.getLanguageId() + " | Chỉ Format: "
+                    + request.isFormatOnly());
 
-            com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI api = new com.example.dt7syntaxcheck.server.api.OnlineCompilerAPI();
-            com.example.dt7syntaxcheck.server.services.SyntaxChecker checker = new com.example.dt7syntaxcheck.server.services.SyntaxChecker();
-            com.example.dt7syntaxcheck.server.services.CodeFormatter formatter = new com.example.dt7syntaxcheck.server.services.CodeFormatter();
+            OnlineCompilerAPI api = new OnlineCompilerAPI();
+            SyntaxChecker checker = new SyntaxChecker();
+            CodeFormatter formatter = new CodeFormatter();
 
             ResponsePayload responsePayload;
 
@@ -84,7 +89,8 @@ public class ClientHandler extends Thread {
                             errorOutput = jsonResponse.optString("stderr", "Lỗi Runtime hoặc API.");
                         }
 
-                        java.util.List<com.example.dt7syntaxcheck.share.ErrorLog> errorLogs = checker.parseErrors(errorOutput, request.getLanguageId());
+                        java.util.List<com.example.dt7syntaxcheck.share.ErrorLog> errorLogs = checker
+                                .parseErrors(errorOutput, request.getLanguageId());
                         responsePayload = new ResponsePayload(false, errorOutput, null, errorLogs);
                         logInfo("Phát hiện lỗi cú pháp! Đã bóc tách.");
                     }
@@ -95,7 +101,6 @@ public class ClientHandler extends Thread {
                 responsePayload = new ResponsePayload(false, "Lỗi Server API: " + e.getMessage(), null, null);
             }
 
-            // GỬI PHẢN HỒI MÃ HÓA VỀ LẠI CLIENT
             String responseJson = gson.toJson(responsePayload);
             String encryptedResponse = cryptoManager.encrypt(responseJson);
             out.println(encryptedResponse);

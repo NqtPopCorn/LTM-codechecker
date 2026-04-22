@@ -1,6 +1,8 @@
 package com.example.dt7syntaxcheck.share;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
@@ -17,13 +19,13 @@ public class CryptoManager {
      * Constructor khởi tạo bộ mã hóa/giải mã.
      *
      * @param myKey: Chuỗi mật khẩu bất kỳ. Hệ thống sẽ tự động băm (hash) chuỗi
-     * này để tạo ra một Key chuẩn 16-byte cho thuật toán AES.
+     *               này để tạo ra một Key chuẩn 16-byte cho thuật toán AES.
      */
     public CryptoManager(String myKey) {
         try {
             byte[] key = myKey.getBytes(StandardCharsets.UTF_8);
             MessageDigest sha = MessageDigest.getInstance("SHA-1");
-            key = sha.digest(key);
+            key = sha.digest(key); // hash ra để tăng hỗn lại, đạt độ dài
             key = Arrays.copyOf(key, 16); // AES-128 yêu cầu key dài đúng 16 byte
             secretKey = new SecretKeySpec(key, ALGORITHM);
         } catch (Exception e) {

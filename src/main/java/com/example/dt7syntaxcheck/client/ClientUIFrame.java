@@ -65,7 +65,7 @@ public class ClientUIFrame extends JFrame {
     private void initComponents() {
         JPanel pnlToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
 
-        String[] languages = {"Python", "Java", "C++", "JavaScript", "C#"};
+        String[] languages = { "Python", "Java", "C++", "JavaScript", "C#" };
         cbLanguage = new JComboBox<>(languages);
 
         btnUpload = new JButton("📁 Upload File");
@@ -113,7 +113,7 @@ public class ClientUIFrame extends JFrame {
         ((JPanel) getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // =========================================================
-        // GẮN SỰ KIỆN CHO CÁC NÚT BẤM 
+        // GẮN SỰ KIỆN CHO CÁC NÚT BẤM
         // =========================================================
         btnFormat.addActionListener(e -> handleFormatCode());
         btnUpload.addActionListener(e -> handleUploadFile());
@@ -154,7 +154,8 @@ public class ClientUIFrame extends JFrame {
     private void handleFormatCode() {
         String code = codeEditor.getText();
         if (code.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập code trước khi định dạng!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập code trước khi định dạng!", "Thông báo",
+                    JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -168,6 +169,7 @@ public class ClientUIFrame extends JFrame {
         // Gửi payload với cờ isFormatOnly = true
         RequestPayload payload = new RequestPayload(code, langId, true);
 
+        // Instance sẽ chạy trên luồng xử lý sự kiện EDT
         SwingWorker<ResponsePayload, Void> worker = new SwingWorker<>() {
             @Override
             protected ResponsePayload doInBackground() throws Exception {
@@ -212,7 +214,8 @@ public class ClientUIFrame extends JFrame {
                 codeEditor.setText(content);
                 consoleOutput.setText("Đã tải file: " + fileToUpload.getName() + " thành công.\n");
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Lỗi khi đọc file: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Lỗi khi đọc file: " + ex.getMessage(), "Lỗi",
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -220,7 +223,8 @@ public class ClientUIFrame extends JFrame {
     private void handleCheckCode() {
         String code = codeEditor.getText();
         if (code.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập code hoặc upload file trước khi kiểm tra!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập code hoặc upload file trước khi kiểm tra!", "Thông báo",
+                    JOptionPane.WARNING_MESSAGE);
             return; // Dừng lại, không gửi lên Server
         }
 

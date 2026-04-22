@@ -20,8 +20,9 @@ public class ClientService {
 
     public ClientService() {
         this.gson = new Gson();
-        // Giả sử dùng chung 1 key tạm thời để test. 
+        // Giả sử dùng chung 1 key tạm thời để test.
         // Sau này có thể làm chức năng trao đổi key RSA với Server khi vừa kết nối.
+
         this.cryptoManager = new CryptoManager("MySecretKey123456");
     }
 
@@ -33,8 +34,10 @@ public class ClientService {
         // 2. Mã hóa chuỗi JSON
         String encryptedData = cryptoManager.encrypt(jsonPayload);
 
-        // 3. Gửi qua Socket 
-        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT); PrintWriter out = new PrintWriter(socket.getOutputStream(), true); BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+        // 3. Gửi qua Socket
+        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT);
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
             // Gửi dữ liệu đã mã hóa lên Server
             out.println(encryptedData);

@@ -25,6 +25,7 @@ public class ClientService {
     private final Gson gson = new Gson();
     private HybridCryptoManager hybridCryptoManager;
     private javax.crypto.SecretKey sessionKeyPlaintext;
+    private InetAddress serverAddr = null;
 
     public ClientService() {
     }
@@ -32,7 +33,9 @@ public class ClientService {
     public ResponsePayload sendCodeToServer(RequestPayload requestPayload) throws Exception {
 
         // ─── 1. DISCOVERY (UDP) ─────────────────────────────
-        InetAddress serverAddr = discoverServer();
+        if (serverAddr == null) {
+            serverAddr = discoverServer();
+        }
 
         // ─── 2. TCP CONNECT ────────────────────────────────
         try (Socket socket = new Socket(serverAddr, SERVER_TCP_PORT);

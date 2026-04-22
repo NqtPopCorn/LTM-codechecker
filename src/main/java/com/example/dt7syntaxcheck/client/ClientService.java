@@ -3,7 +3,13 @@ package com.example.dt7syntaxcheck.client;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+
+import javax.crypto.SecretKey;
 
 import com.example.dt7syntaxcheck.share.HybridCryptoManager;
 import com.example.dt7syntaxcheck.share.RequestPayload;
@@ -12,33 +18,24 @@ import com.google.gson.Gson;
 
 public class ClientService {
 
-    private String SERVER_IP = "localhost";
-    private int SERVER_PORT = 5000;
+    private static final int BROADCAST_PORT = 4999;
+    private static final int SERVER_TCP_PORT = 5000;
+    private static final int TIMEOUT_MS = 5000;
 
+    private final Gson gson = new Gson();
     private HybridCryptoManager hybridCryptoManager;
-    private Gson gson;
-    private javax.crypto.SecretKey sessionKeyPlaintext; // Lưu session key plaintext từ request
+    private javax.crypto.SecretKey sessionKeyPlaintext;
 
     public ClientService() {
-        this.gson = new Gson();
-        try {
-            // Tìm server qua JSONBin rồi kết nối TCP
-            String serverAddress = new JSONBinFinder().findServerAddress();
-            this.SERVER_IP = serverAddress.split(":")[0];
-            this.SERVER_PORT = Integer.parseInt(serverAddress.split(":")[1]);
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("[Client] Không thể kết nối: " + e.getMessage());
-        }
     }
 
-    /**
-     * Hàm này thực hiện: 1. Key Exchange: Nhận public key từ server 2. Mã hóa
-     * Hybrid: Tạo session key AES -> Mã hóa RSA -> Mã hóa AES 3. Gửi request và
-     * nhận response 4. Giải mã Hybrid response
-     */
     public ResponsePayload sendCodeToServer(RequestPayload requestPayload) throws Exception {
-        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT);
+
+        // ─── 1. DISCOVERY (UDP) ─────────────────────────────
+        InetAddress serverAddr = discoverServer();
+
+        // ─── 2. TCP CONNECT ────────────────────────────────
+        try (Socket socket = new Socket(serverAddr, SERVER_TCP_PORT);
                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
@@ -92,12 +89,43 @@ public class ClientService {
             // Giải mã response data bằng session key plaintext (không cần RSA)
             String decryptedJson = hybridCryptoManager.decryptDataWithAES(responseEncryptedData, sessionKeyPlaintext);
             System.out.println("[CLIENT] ✓ Giải mã AES thành công!");
-            System.out.println("[CLIENT] ✓ Giải mã AES thành công!");
 
             // ============================================
             // BƯỚC 6: CHUYỂN ĐỔI JSON THÀNH OBJECT
             // ============================================
             return gson.fromJson(decryptedJson, ResponsePayload.class);
+        }
+    }
+
+    // =====================================================
+    // UDP DISCOVERY
+    // =====================================================
+
+    private InetAddress discoverServer() throws Exception {
+        try (DatagramSocket socket = new DatagramSocket()) {
+            socket.setBroadcast(true);
+            socket.setSoTimeout(TIMEOUT_MS);
+
+            byte[] sendData = "DISCOVER_SERVER".getBytes(StandardCharsets.UTF_8);
+
+            socket.send(new DatagramPacket(
+                    sendData,
+                    sendData.length,
+                    InetAddress.getByName("255.255.255.255"),
+                    BROADCAST_PORT));
+
+            byte[] recvBuf = new byte[256];
+            DatagramPacket packet = new DatagramPacket(recvBuf, recvBuf.length);
+
+            socket.receive(packet);
+
+            String msg = new String(packet.getData(), 0, packet.getLength());
+
+            if (!"SERVER_HERE".equals(msg)) {
+                throw new Exception("Invalid discovery response");
+            }
+
+            return packet.getAddress();
         }
     }
 }

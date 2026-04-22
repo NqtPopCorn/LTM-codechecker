@@ -1,50 +1,32 @@
 package com.example.dt7syntaxcheck.server;
 
-import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-
-import com.example.dt7syntaxcheck.server.KeyManager.RSAKeyPairs;
-import com.example.dt7syntaxcheck.server.services.JSONBinRegistrar;
+import java.nio.charset.StandardCharsets;
 
 public class ServerMain {
 
-    // Định nghĩa cổng giao tiếp cho Server. Phải khớp với cổng mà ClientService
-    // đang gọi tới.
-    private static final int PORT = 5000;
+    private static final int DATA_PORT = 5000; // Port nhận yêu cầu kết nối mới
+    private static final int BUFFER_SIZE = 256;
 
-    // Server chỉ tạo và lưu 1 cặp khóa, public key dùng cho tất cả user
-    private static RSAKeyPairs rsaKeyPair;
+    public static void main(String[] args) throws Exception {
 
-    public static void main(String[] args) {
-        System.out.println("=================================================");
-        System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE   ");
-        System.out.println("=================================================");
-        System.out.println("Đang khởi động hệ thống...");
+        // Lấy RSA key pair (giữ nguyên logic cũ)
+        KeyManager keyManager = new KeyManager();
+        KeyManager.RSAKeyPairs rsaKeyPair = KeyManager.initializeKeys();
 
-        // Đăng ký lên JSONBin
-        try {
-            new JSONBinRegistrar().register(PORT);
-        } catch (Exception e) {
-            System.err.print("[ERROR] Đăng kí thông tin server lên JSONBin thất bại");
-        }
-        System.out.println("[INFO] Đã đăng kí lên JSONBin thành công!\n");
+        // ── Khởi động BroadcastListener UDP socket(port 4999)
+        // ───────────────────────────
+        new BroadcastListener().start();
 
-        // Khởi tạo RSA keys cho mã hóa lai
-        try {
-            rsaKeyPair = KeyManager.initializeKeys();
-            System.out.println("[INFO] RSA keys đã khởi tạo thành công!\n");
-        } catch (Exception e) {
-            System.err.println("[-] Lỗi khởi tạo RSA keys: " + e.getMessage());
-            e.printStackTrace();
-            return;
-        }
+        // ── Vòng lặp chính TCP socket : lắng nghe "HELLO" trên port 5000
+        // ─────────────────
+        System.out.println("[SERVER] TCP Server đang lắng nghe trên port " + DATA_PORT + "...");
 
-        // Khởi tạo ServerSocket
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("[INFO] Server đang lắng nghe kết nối tại port " + PORT + "...\n");
-
-            // Vòng lặp vô hạn để giữ Server luôn mở và sẵn sàng đón nhiều Client
+        try (ServerSocket serverSocket = new ServerSocket(DATA_PORT)) {
             while (true) {
                 // Lệnh accept() sẽ chặn luồng tại đây cho đến khi có 1 Client gõ cửa
                 Socket clientSocket = serverSocket.accept();
@@ -58,9 +40,6 @@ public class ServerMain {
                 clientHandler.start();
             }
 
-        } catch (IOException e) {
-            System.err.println("[-] Lỗi Server (Cổng " + PORT + " có thể đang bị chiếm dụng): " + e.getMessage());
-            e.printStackTrace();
         }
     }
 }

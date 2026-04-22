@@ -10,11 +10,24 @@ public class ServerMain {
     // đang gọi tới.
     private static final int PORT = 5000;
 
+    // Lưu RSA key pairs cho mã hóa lai
+    private static KeyManager.RSAKeyPair rsaKeyPair;
+
     public static void main(String[] args) {
         System.out.println("=================================================");
         System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE   ");
         System.out.println("=================================================");
         System.out.println("Đang khởi động hệ thống...");
+
+        // Khởi tạo RSA keys cho mã hóa lai
+        try {
+            rsaKeyPair = KeyManager.initializeKeys();
+            System.out.println("[INFO] RSA keys đã khởi tạo thành công!\n");
+        } catch (Exception e) {
+            System.err.println("[-] Lỗi khởi tạo RSA keys: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
 
         // Khởi tạo ServerSocket
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
@@ -29,12 +42,9 @@ public class ServerMain {
                 int clientPort = clientSocket.getPort();
                 System.out.println("[+] Phát hiện Client mới kết nối từ: " + clientIP + ":" + clientPort);
 
-                // Kỹ thuật Multithread:
-                // Giao ngay socket của Client vừa kết nối cho một luồng (Thread) ClientHandler
-                // xử lý.
-                // Luồng chính (ServerMain) lập tức quay lại vòng lặp while để đón người tiếp
-                // theo.
-                ClientHandler clientHandler = new ClientHandler(clientSocket);
+                // Multithread: Giao socket cho ClientHandler, MainThread tiếp tục đón client
+                // khác
+                ClientHandler clientHandler = new ClientHandler(clientSocket, rsaKeyPair);
                 clientHandler.start();
             }
 

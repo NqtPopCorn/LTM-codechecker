@@ -4,14 +4,16 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+import com.example.dt7syntaxcheck.server.KeyManager.RSAKeyPairs;
+
 public class ServerMain {
 
     // Định nghĩa cổng giao tiếp cho Server. Phải khớp với cổng mà ClientService
     // đang gọi tới.
     private static final int PORT = 5000;
 
-    // Lưu RSA key pairs cho mã hóa lai
-    private static KeyManager.RSAKeyPair rsaKeyPair;
+    // Server chỉ tạo và lưu 1 cặp khóa, public key dùng cho tất cả user
+    private static RSAKeyPairs rsaKeyPair;
 
     public static void main(String[] args) {
         System.out.println("=================================================");
@@ -42,8 +44,7 @@ public class ServerMain {
                 int clientPort = clientSocket.getPort();
                 System.out.println("[+] Phát hiện Client mới kết nối từ: " + clientIP + ":" + clientPort);
 
-                // Multithread: Giao socket cho ClientHandler, MainThread tiếp tục đón client
-                // khác
+                // Tạo thread xử lý client này, non-bloking
                 ClientHandler clientHandler = new ClientHandler(clientSocket, rsaKeyPair);
                 clientHandler.start();
             }

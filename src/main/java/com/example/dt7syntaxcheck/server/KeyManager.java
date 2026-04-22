@@ -99,12 +99,12 @@ public class KeyManager {
     /**
      * Tạo hoặc tải RSA key pairs
      */
-    public static RSAKeyPair initializeKeys() throws Exception {
+    public static RSAKeyPairs initializeKeys() throws Exception {
         if (keyFilesExist()) {
             System.out.println("[+] Tải RSA keys từ file...");
             String publicKeyStr = loadPublicKey();
             String privateKeyStr = loadPrivateKey();
-            return new RSAKeyPair(publicKeyStr, privateKeyStr);
+            return new RSAKeyPairs(publicKeyStr, privateKeyStr);
         } else {
             System.out.println("[+] Tạo cặp RSA keys mới...");
             KeyPair keyPair = generateRSAKeyPair();
@@ -112,19 +112,19 @@ public class KeyManager {
             savePrivateKey(keyPair.getPrivate());
             String publicKeyStr = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
             String privateKeyStr = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-            return new RSAKeyPair(publicKeyStr, privateKeyStr);
+            return new RSAKeyPairs(publicKeyStr, privateKeyStr);
         }
     }
 
     /**
      * Lớp lưu trữ cặp public/private key dưới dạng Base64
      */
-    public static class RSAKeyPair {
+    public static class RSAKeyPairs {
 
         public String publicKey;
         public String privateKey;
 
-        public RSAKeyPair(String publicKey, String privateKey) {
+        public RSAKeyPairs(String publicKey, String privateKey) {
             this.publicKey = publicKey;
             this.privateKey = privateKey;
         }

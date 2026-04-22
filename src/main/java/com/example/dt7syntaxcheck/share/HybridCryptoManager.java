@@ -15,7 +15,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * HybridCryptoManager: Mã hóa lai kết hợp RSA (Asymmetric) + AES (Symmetric)
+ * HybridCryptoManager: Helper hỗ trợ mã hóa và giải mã của kĩ thuật Hybrid
  *
  * Quá trình: 1. Client tạo session key AES ngẫu nhiên 2. Client mã hóa session
  * key bằng RSA public key của server 3. Client mã hóa dữ liệu bằng AES session
@@ -71,7 +71,7 @@ public class HybridCryptoManager {
     }
 
     /**
-     * Tạo session key AES ngẫu nhiên (256-bit)
+     * Tạo session key AES ngẫu nhiên (256-bit), cho client xài
      */
     public static SecretKey generateAESKey() throws Exception {
         KeyGenerator keyGen = KeyGenerator.getInstance(AES_ALGORITHM);

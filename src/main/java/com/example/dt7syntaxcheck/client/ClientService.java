@@ -20,7 +20,7 @@ public class ClientService {
     private HybridCryptoManager hybridCryptoManager;
     private Gson gson;
     private javax.crypto.SecretKey sessionKeyPlaintext;  // Lưu session key plaintext từ request
-    
+
     // Biến lưu server IP:PORT được khám phá
     private String serverIP;
     private int serverPort;
@@ -34,14 +34,14 @@ public class ClientService {
     // PHƯƠNG THỨC: KHÁM PHÁ SERVER
     // =====================================================
     /**
-     * Khám phá server IP từ ServiceRegistry
-     * Nếu thất bại, sử dụng fallback address (localhost:5000)
+     * Khám phá server IP từ ServiceRegistry Nếu thất bại, sử dụng fallback
+     * address (localhost:5000)
      */
     private void discoverServer() {
         System.out.println("[CLIENT] Đang khám phá server...");
-        
+
         String serverInfo = ServiceRegistry.discoverServer();
-        
+
         if (serverInfo != null && !serverInfo.isEmpty()) {
             // Parse serverInfo từ định dạng "IP:PORT"
             try {
@@ -56,7 +56,7 @@ public class ClientService {
                 System.out.println("[CLIENT] ! Lỗi parse server info: " + serverInfo);
             }
         }
-        
+
         // Fallback: sử dụng địa chỉ local
         System.out.println("[CLIENT] ! Sử dụng fallback address: " + FALLBACK_SERVER_IP + ":" + FALLBACK_SERVER_PORT);
         this.serverIP = FALLBACK_SERVER_IP;

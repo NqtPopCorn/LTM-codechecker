@@ -8,19 +8,59 @@ import java.net.Socket;
 import com.example.dt7syntaxcheck.share.HybridCryptoManager;
 import com.example.dt7syntaxcheck.share.RequestPayload;
 import com.example.dt7syntaxcheck.share.ResponsePayload;
+import com.example.dt7syntaxcheck.share.ServiceRegistry;
 import com.google.gson.Gson;
 
 public class ClientService {
 
-    private static final String SERVER_IP = "localhost";
-    private static final int SERVER_PORT = 5000;
+    // Fallback: nếu service discovery thất bại, sử dụng địa chỉ local
+    private static final String FALLBACK_SERVER_IP = "localhost";
+    private static final int FALLBACK_SERVER_PORT = 5000;
 
     private HybridCryptoManager hybridCryptoManager;
     private Gson gson;
     private javax.crypto.SecretKey sessionKeyPlaintext;  // Lưu session key plaintext từ request
+    
+    // Biến lưu server IP:PORT được khám phá
+    private String serverIP;
+    private int serverPort;
 
     public ClientService() {
         this.gson = new Gson();
+        discoverServer();  // Khám phá server khi khởi tạo
+    }
+
+    // =====================================================
+    // PHƯƠNG THỨC: KHÁM PHÁ SERVER
+    // =====================================================
+    /**
+     * Khám phá server IP từ ServiceRegistry
+     * Nếu thất bại, sử dụng fallback address (localhost:5000)
+     */
+    private void discoverServer() {
+        System.out.println("[CLIENT] Đang khám phá server...");
+        
+        String serverInfo = ServiceRegistry.discoverServer();
+        
+        if (serverInfo != null && !serverInfo.isEmpty()) {
+            // Parse serverInfo từ định dạng "IP:PORT"
+            try {
+                String[] parts = serverInfo.split(":");
+                if (parts.length == 2) {
+                    this.serverIP = parts[0];
+                    this.serverPort = Integer.parseInt(parts[1]);
+                    System.out.println("[CLIENT] ✓ Khám phá server thành công: " + serverInfo);
+                    return;
+                }
+            } catch (Exception e) {
+                System.out.println("[CLIENT] ! Lỗi parse server info: " + serverInfo);
+            }
+        }
+        
+        // Fallback: sử dụng địa chỉ local
+        System.out.println("[CLIENT] ! Sử dụng fallback address: " + FALLBACK_SERVER_IP + ":" + FALLBACK_SERVER_PORT);
+        this.serverIP = FALLBACK_SERVER_IP;
+        this.serverPort = FALLBACK_SERVER_PORT;
     }
 
     /**
@@ -29,7 +69,7 @@ public class ClientService {
      * nhận response 4. Giải mã Hybrid response
      */
     public ResponsePayload sendCodeToServer(RequestPayload requestPayload) throws Exception {
-        try (Socket socket = new Socket(SERVER_IP, SERVER_PORT); PrintWriter out = new PrintWriter(socket.getOutputStream(), true); BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+        try (Socket socket = new Socket(serverIP, serverPort); PrintWriter out = new PrintWriter(socket.getOutputStream(), true); BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
             // ============================================
             // BƯỚC 1: KEY EXCHANGE - NHẬN PUBLIC KEY TỪ SERVER
@@ -77,7 +117,6 @@ public class ClientService {
             // ============================================
             // Giải mã response data bằng session key plaintext (không cần RSA)
             String decryptedJson = hybridCryptoManager.decryptDataWithAES(responseEncryptedData, sessionKeyPlaintext);
-            System.out.println("[CLIENT] ✓ Giải mã AES thành công!");
             System.out.println("[CLIENT] ✓ Giải mã AES thành công!");
 
             // ============================================

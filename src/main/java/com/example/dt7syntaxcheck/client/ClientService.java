@@ -20,7 +20,7 @@ public class ClientService {
 
     private static final int BROADCAST_PORT = 4999;
     private static final int SERVER_TCP_PORT = 5000;
-    private static final int TIMEOUT_MS = 5000;
+    private static final int TIMEOUT_MS = 10000;
 
     private final Gson gson = new Gson();
     private HybridCryptoManager hybridCryptoManager;
@@ -31,11 +31,14 @@ public class ClientService {
     }
 
     public ResponsePayload sendCodeToServer(RequestPayload requestPayload) throws Exception {
-
+        // System.out.println("[Server]: " + serverAddr);
         // ─── 1. DISCOVERY (UDP) ─────────────────────────────
-        if (serverAddr == null) {
-            serverAddr = discoverServer();
-        }
+        // if (serverAddr == null) {
+        serverAddr = InetAddress.getByName(ClientService.discoverServerIp());
+        // }
+        // System.out.println("[Server]: " + serverAddr);
+        // return null;
+        // serverAddr = InetAddress.getByName("192.186.43.172");
 
         // ─── 2. TCP CONNECT ────────────────────────────────
         try (Socket socket = new Socket(serverAddr, SERVER_TCP_PORT);
@@ -62,10 +65,14 @@ public class ClientService {
                     .encryptHybridWithKey(jsonPayload);
             this.sessionKeyPlaintext = encryptedMessage.getSessionKey(); // LƯU SESSION KEY
             System.out.println("[CLIENT] ✓ Mã hóa Hybrid thành công!");
-            System.out.println("[CLIENT] → Session Key (RSA): " + encryptedMessage.getEncryptedSessionKey().substring(0,
-                    Math.min(50, encryptedMessage.getEncryptedSessionKey().length())) + "...");
-            System.out.println("[CLIENT] → Data (AES): " + encryptedMessage.getEncryptedData().substring(0,
-                    Math.min(50, encryptedMessage.getEncryptedData().length())) + "...");
+            System.out.println("[CLIENT] → Session Key (RSA): " +
+                    encryptedMessage.getEncryptedSessionKey().substring(0,
+                            Math.min(50, encryptedMessage.getEncryptedSessionKey().length()))
+                    + "...");
+            System.out.println("[CLIENT] → Data (AES): " +
+                    encryptedMessage.getEncryptedData().substring(0,
+                            Math.min(50, encryptedMessage.getEncryptedData().length()))
+                    + "...");
 
             // ============================================
             // BƯỚC 3: GỬI HYBRID ENCRYPTED DATA TỚI SERVER
@@ -90,7 +97,8 @@ public class ClientService {
             // BƯỚC 5: GIẢI MÃ AES RESPONSE (SỬ DỤNG SESSION KEY PLAINTEXT)
             // ============================================
             // Giải mã response data bằng session key plaintext (không cần RSA)
-            String decryptedJson = hybridCryptoManager.decryptDataWithAES(responseEncryptedData, sessionKeyPlaintext);
+            String decryptedJson = hybridCryptoManager.decryptDataWithAES(responseEncryptedData,
+                    sessionKeyPlaintext);
             System.out.println("[CLIENT] ✓ Giải mã AES thành công!");
 
             // ============================================
@@ -98,37 +106,63 @@ public class ClientService {
             // ============================================
             return gson.fromJson(decryptedJson, ResponsePayload.class);
         }
+
     }
 
     // =====================================================
     // UDP DISCOVERY
     // =====================================================
 
-    private InetAddress discoverServer() throws Exception {
-        try (DatagramSocket socket = new DatagramSocket()) {
-            socket.setBroadcast(true);
-            socket.setSoTimeout(TIMEOUT_MS);
+    // private InetAddress discoverServer() throws Exception {
+    // try (DatagramSocket socket = new DatagramSocket()) {
+    // socket.setBroadcast(true);
+    // socket.setSoTimeout(TIMEOUT_MS);
 
-            byte[] sendData = "DISCOVER_SERVER".getBytes(StandardCharsets.UTF_8);
+    // byte[] sendData = "DISCOVER_SERVER".getBytes(StandardCharsets.UTF_8);
 
-            socket.send(new DatagramPacket(
-                    sendData,
-                    sendData.length,
-                    InetAddress.getByName("255.255.255.255"),
-                    BROADCAST_PORT));
+    // socket.send(new DatagramPacket(
+    // sendData,
+    // sendData.length,
+    // InetAddress.getByName("255.255.255.255"),
+    // BROADCAST_PORT));
 
-            byte[] recvBuf = new byte[256];
-            DatagramPacket packet = new DatagramPacket(recvBuf, recvBuf.length);
+    // byte[] recvBuf = new byte[256];
+    // DatagramPacket packet = new DatagramPacket(recvBuf, recvBuf.length);
 
-            socket.receive(packet);
+    // // bloking
+    // socket.receive(packet);
 
-            String msg = new String(packet.getData(), 0, packet.getLength());
+    // String msg = new String(packet.getData(), 0, packet.getLength());
 
-            if (!"SERVER_HERE".equals(msg)) {
-                throw new Exception("Invalid discovery response");
+    // if (!"SERVER_HERE".equals(msg)) {
+    // throw new Exception("Invalid discovery response");
+    // }
+
+    // System.out.println("[Dicovery]: " + packet.getAddress().toString());
+    // return packet.getAddress();
+    // }
+    // }
+
+    protected static String discoverServerIp() {
+        System.out.println("[NETWORK] Searching for Server via UDP Broadcast...");
+        try (DatagramSocket socket = new DatagramSocket(BROADCAST_PORT)) {
+            socket.setSoTimeout(10000);
+            byte[] buffer = new byte[1024];
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+
+            while (true) {
+                socket.receive(packet);
+                String message = new String(packet.getData(), 0, packet.getLength());
+
+                if (message.startsWith("TIKI_SERVER_DISCOVERY")) {
+                    String ip = packet.getAddress().getHostAddress();
+                    System.out.println("[NETWORK] Server found at: " + ip);
+                    return ip;
+                }
             }
-
-            return packet.getAddress();
+        } catch (Exception e) {
+            System.err.println("[ERROR] Server discovery timed out.");
+            return null;
         }
     }
 }

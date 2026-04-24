@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 public class ServerMain {
 
     private static final int DATA_PORT = 5000; // Port nhận yêu cầu kết nối mới
-    private static final int BUFFER_SIZE = 256;
+    // private static final int BUFFER_SIZE = 256;
 
     public static void main(String[] args) throws Exception {
 
@@ -18,11 +18,7 @@ public class ServerMain {
         KeyManager keyManager = new KeyManager();
         KeyManager.RSAKeyPairs rsaKeyPair = KeyManager.initializeKeys();
 
-        // ── Khởi động BroadcastListener UDP socket(port 4999)
-        // ───────────────────────────
-        new BroadcastListener().start();
-
-        // ── Vòng lặp chính TCP socket : lắng nghe "HELLO" trên port 5000
+        startDiscoveryBeacon();
         // ─────────────────
         System.out.println("[SERVER] TCP Server đang lắng nghe trên port " + DATA_PORT + "...");
 
@@ -41,5 +37,31 @@ public class ServerMain {
             }
 
         }
+    }
+
+    private static final int BROADCAST_PORT = 4999;
+
+    private static void startDiscoveryBeacon() {
+        Thread beaconThread = new Thread(() -> {
+            try (DatagramSocket socket = new DatagramSocket()) {
+                socket.setBroadcast(true);
+                String message = "TIKI_SERVER_DISCOVERY:" + DATA_PORT;
+                byte[] buffer = message.getBytes();
+
+                System.out.println("[SYSTEM] Discovery Beacon started (UDP Broadcast).");
+
+                while (true) {
+                    DatagramPacket packet = new DatagramPacket(
+                            buffer, buffer.length,
+                            InetAddress.getByName("255.255.255.255"), BROADCAST_PORT);
+                    socket.send(packet);
+                    Thread.sleep(3000);
+                }
+            } catch (Exception e) {
+                System.err.println("[ERROR] Discovery Beacon failed: " + e.getMessage());
+            }
+        });
+        beaconThread.setDaemon(true);
+        beaconThread.start();
     }
 }

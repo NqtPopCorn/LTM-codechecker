@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  server:
+    build: .
+    container_name: server
+    command: ["server"]
+    networks:
+      - mynet
+
+  client:
+    build: .
+    command: ["client", "--host=server"]
+    depends_on:
+      - server
+    networks:
+      - mynet
+    deploy:
+      replicas: 3
+
+networks:
+  mynet:

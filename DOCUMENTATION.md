@@ -15,10 +15,11 @@
 4. [Hướng Dẫn Build](#-hướng-dẫn-build)
 5. [Kiến Trúc & Chức Năng](#-kiến-trúc--chức-năng)
 6. [📊 Phân Tích Luồng Mã Hóa Lai](#-phân-tích-luồng-mã-hóa-lai-hybrid-encryption-flow)
-7. [API & Công Nghệ](#-api--công-nghệ)
-8. [Danh Sách Thay Đổi](#-danh-sách-thay-đổi)
-9. [Tối Ưu Hóa Code](#-tối-ưu-hóa-code)
-10. [Troubleshooting](#-troubleshooting)
+7. [🔍 Service Discovery](#-service-discovery)
+8. [API & Công Nghệ](#-api--công-nghệ)
+9. [Danh Sách Thay Đổi](#-danh-sách-thay-đổi)
+10. [Tối Ưu Hóa Code](#-tối-ưu-hóa-code)
+11. [Troubleshooting](#-troubleshooting)
 
 ---
 
@@ -922,6 +923,306 @@ public void testHybridEncryption() {
     assertEquals(response, decryptedResponse);
 }
 ```
+
+---
+
+# 🔍 Service Discovery
+
+## Khái Niệm
+
+**Service Discovery** là cơ chế tự động giúp các dịch vụ (services) trong hệ thống phân tán tìm kiếm và kết nối với nhau mà không cần biết địa chỉ cụ thể từ trước.
+
+### ❓ Tại sao cần Service Discovery?
+
+#### ❌ **Cách cũ (Hard-coded)**
+```
+Client: serverIP = "192.168.1.100"
+Vấn đề:
+- Nếu server IP thay đổi → Client bị lỗi
+- Khó mở rộng (scaling)
+- Không linh hoạt trong cloud
+```
+
+#### ✅ **Cách mới (Service Discovery)**
+```
+Client tự động tìm server IP từ bảng đăng ký
+Lợi ích:
+- Server có thể thay đổi IP tùy ý
+- Hỗ trợ load balancing (nhiều server)
+- Linh hoạt trong môi trường cloud
+```
+
+---
+
+## 🏗️ Kiến Trúc Service Discovery
+
+### Sơ Đồ Tổng Quan
+
+```
+┌────────────────────────────────────────────────────┐
+│   GITHUB GIST (Registry - Public Storage)          │
+│   File: server_registry.txt                        │
+│   Content: 192.168.1.100:5000 (được server ghi)   │
+│   Auth: Private Gist + Personal Access Token      │
+└────────────────────────────────────────────────────┘
+                    ▲ PATCH (write)
+                    │ GET (read)
+        ┌───────────┴───────────┐
+        │ HTTPS API              │
+        │ (json format)          │
+        │                        │
+        ▼ GET                   ▼ PATCH
+┌──────────────────┐    ┌──────────────────┐
+│ CLIENT           │    │ SERVER           │
+│ ClientService    │    │ ServerMain       │
+│ (khám phá)       │    │ (đăng ký)        │
+│                  │    │                  │
+│ Khởi động:       │    │ Khởi động:       │
+│ 1. GET Gist      │    │ 1. Lấy local IP  │
+│ 2. Parse IP:Port │    │ 2. PATCH Gist    │
+│ 3. Connect TCP   │    │ 3. Listen 5000   │
+└──────────────────┘    └──────────────────┘
+        │ TCP connection
+        └────────────────►(Hybrid Crypto)
+```
+
+---
+
+## 🔄 Luồng Hoạt Động Chi Tiết
+
+### 1️⃣ **SERVER KHỞI ĐỘNG & ĐĂN KÝ**
+
+```
+ServerMain.main()
+   │
+   ├─ KeyManager.initializeKeys()
+   │  └─ Tạo RSA key pair
+   │
+   ├─ ServerSocket(5000)
+   │  └─ Mở server trên port 5000
+   │
+   └─ ServiceRegistry.registerServer(5000)
+      │
+      ├─ getLocalIPAddress()
+      │  └─ IP: "192.168.1.100"
+      │
+      ├─ serverInfo = "192.168.1.100:5000"
+      │
+      ├─ PATCH request → GitHub API
+      │  ```
+      │  PATCH https://api.github.com/gists/{GIST_ID}
+      │  Header: Authorization: Bearer {TOKEN}
+      │  Body: {
+      │    "files": {
+      │      "server_registry.txt": {
+      │        "content": "192.168.1.100:5000"
+      │      }
+      │    }
+      │  }
+      │  ```
+      │
+      └─ Print: "[+] Đăng ký server thành công!"
+         Gist updated: server_registry.txt = "192.168.1.100:5000"
+```
+
+### 2️⃣ **CLIENT KHỞI ĐỘNG & KHÁM PHÁ**
+
+```
+ClientUIFrame.main()
+   │
+   └─ ClientService()
+      │
+      └─ discoverServer()
+         │
+         ├─ ServiceRegistry.discoverServer()
+         │  │
+         │  ├─ GET request → GitHub API
+         │  │  ```
+         │  │  GET https://api.github.com/gists/{GIST_ID}
+         │  │  Header: Authorization: Bearer {TOKEN}
+         │  │  ```
+         │  │
+         │  ├─ Response JSON:
+         │  │  ```json
+         │  │  {
+         │  │    "files": {
+         │  │      "server_registry.txt": {
+         │  │        "content": "192.168.1.100:5000"
+         │  │      }
+         │  │    }
+         │  │  }
+         │  │  ```
+         │  │
+         │  └─ Extract: "192.168.1.100:5000"
+         │
+         ├─ Parse: serverIP = "192.168.1.100", serverPort = 5000
+         │
+         └─ Store: this.serverIP, this.serverPort
+```
+
+### 3️⃣ **CLIENT KẾT NỐI SERVER**
+
+```
+ClientService.sendCodeToServer()
+   │
+   ├─ Socket(this.serverIP, this.serverPort)
+   │  Socket("192.168.1.100", 5000)
+   │
+   └─ Hybrid Crypto handshake + data exchange
+      (như đã mô tả ở phần Encryption)
+```
+
+---
+
+## 📊 HTTP Request/Response Details
+
+### SERVER: PATCH Request (Đăng Ký)
+
+**Request**:
+```
+PATCH /gists/{GIST_ID} HTTP/1.1
+Host: api.github.com
+Authorization: Bearer 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
+Accept: application/vnd.github+json
+Content-Type: application/json
+
+{
+  "files": {
+    "server_registry.txt": {
+      "content": "192.168.1.100:5000"
+    }
+  },
+  "description": "Server IP Registry"
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "url": "https://api.github.com/gists/814c622f74340fe2f5e0b92cf385f95b",
+  "files": {
+    "server_registry.txt": {
+      "filename": "server_registry.txt",
+      "type": "text/plain",
+      "language": "Text",
+      "raw_url": "https://gist.githubusercontent.com/...",
+      "size": 19,
+      "truncated": false,
+      "content": "192.168.1.100:5000"
+    }
+  },
+  "public": false,
+  "created_at": "2026-04-17T10:30:00Z",
+  "updated_at": "2026-04-24T14:45:00Z",
+  "owner": {
+    "login": "NqtPopCorn",
+    "id": 12345678
+  }
+}
+```
+
+### CLIENT: GET Request (Khám Phá)
+
+**Request**:
+```
+GET /gists/814c622f74340fe2f5e0b92cf385f95b HTTP/1.1
+Host: api.github.com
+Authorization: Bearer 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
+Accept: application/vnd.github+json
+```
+
+**Response (200 OK)**:
+```json
+{
+  "url": "https://api.github.com/gists/814c622f74340fe2f5e0b92cf385f95b",
+  "files": {
+    "server_registry.txt": {
+      "filename": "server_registry.txt",
+      "type": "text/plain",
+      "language": "Text",
+      "raw_url": "https://gist.githubusercontent.com/...",
+      "size": 19,
+      "truncated": false,
+      "content": "192.168.1.100:5000"
+    }
+  },
+  "public": false,
+  "created_at": "2026-04-17T10:30:00Z",
+  "updated_at": "2026-04-24T14:45:00Z"
+}
+```
+
+---
+
+## ⚙️ Cấu Hình (ServiceRegistry.java)
+
+### Các hằng số cần cấu hình
+
+```java
+// src/main/java/com/example/dt7syntaxcheck/share/ServiceRegistry.java
+
+// ✏️ TODO: Thay đổi giá trị này
+private static final String GIST_ID = "814c622f74340fe2f5e0b92cf385f95b";
+private static final String GITHUB_TOKEN = "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";
+private static final String GIST_FILENAME = "server_registry.txt";
+```
+
+### Hướng dẫn tạo
+
+1. **Tạo GitHub Gist**: https://gist.github.com
+   - File name: `server_registry.txt`
+   - Content: `127.0.0.1:5000` (placeholder)
+   - Chọn: **Private**
+
+2. **Lấy Gist ID** từ URL:
+   ```
+   https://gist.github.com/username/{GIST_ID}
+   ↑                                    ↑
+   Ví dụ: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p
+   ```
+
+3. **Tạo GitHub Personal Access Token**:
+   - Vào: GitHub Settings → Developer settings → Personal access tokens
+   - Scope: ✅ `gist` (read, create, update)
+   - Copy token (1 lần duy nhất!)
+
+4. **Cập nhật ServiceRegistry.java** với GIST_ID & TOKEN
+
+---
+
+## 🛡️ Bảo Mật (Security)
+
+### ✅ Best Practices
+
+| Mục | Cách Làm |
+|-----|----------|
+| **Token** | Không hard-code trong source, sử dụng environment variables |
+| **Gist** | Sử dụng **Private Gist**, không public |
+| **HTTPS** | GitHub API luôn sử dụng HTTPS |
+| **Connection** | Chỉ cho phép TCP từ trusted networks |
+
+### 📝 Environment Variables (Recommended)
+
+```bash
+# .env file (gitignored)
+export GITHUB_GIST_ID="814c622f74340fe2f5e0b92cf385f95b"
+export GITHUB_TOKEN="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"
+```
+
+```java
+// ServiceRegistry.java (Production)
+private static final String GIST_ID = System.getenv("GITHUB_GIST_ID");
+private static final String GITHUB_TOKEN = System.getenv("GITHUB_TOKEN");
+```
+
+---
+
+## 📚 Tài Liệu Chi Tiết
+
+**Xem thêm:**
+- **SERVICE_DISCOVERY_SETUP.md** - Hướng dẫn cấu hình từng bước
+- **SERVICE_DISCOVERY_CONCEPT.md** - Khái niệm & ý tưởng chi tiết
+- **ServiceRegistry.java** - Mã nguồn implementation
 
 ---
 

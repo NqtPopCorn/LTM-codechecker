@@ -25,12 +25,12 @@ public class ServiceRegistry {
     // Gist ID - ID của Gist trên GitHub (sẽ được tạo lần đầu)
     // BẠN CẦN THAY ĐỔI: Tạo 1 Gist mới trên GitHub, lấy ID từ URL
     // VÍ DỤ: https://gist.github.com/username/GIST_ID
-    private static final String GIST_ID = "Your GIST_ID_HERE";  // Thay thế bằng ID thực tế
+    private static final String GIST_ID = "814c622f74340fe2f5e0b92cf385f95b";  // Thay thế bằng ID thực tế
 
     // GitHub Personal Access Token
     // BẠN CẦN THAY ĐỔI: Tạo token trên GitHub Settings -> Developer settings -> Personal access tokens
     // Token cần quyền: gist (create, read, update gists)
-    private static final String GITHUB_TOKEN = "Your GITHUB_TOKEN_HERE";  // Thay thế bằng token thực tế
+    private static final String GITHUB_TOKEN = "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";  // Thay thế bằng token thực tế
 
     // Tên file trong Gist để lưu trữ server IP
     private static final String GIST_FILENAME = "server_registry.txt";

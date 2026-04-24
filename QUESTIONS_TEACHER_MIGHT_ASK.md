@@ -10,7 +10,7 @@
 2. [Mã Hóa Lai (Hybrid Encryption)](#mã-hóa-lai-hybrid-encryption)
 3. [Service Discovery](#service-discovery)
 4. [Kiến Trúc Server-Client](#kiến-trúc-server-client)
-5. [Công Nghệ & API](#công-nghệ--api)
+5. [Công Nghệ & API](#công-nghệ--api)SERVICE DISCOVERY
 6. [Xử Lý Lỗi & Bảo Mật](#xử-lý-lỗi--bảo-mật)
 7. [Multithread & Performance](#multithread--performance)
 8. [Cấu Hình & Deployment](#cấu-hình--deployment)
@@ -164,6 +164,33 @@
   - Lý do reuse: Client đã có plaintext key, không cần decrypt RSA lại
 - **Security**: Key destroy sau response
 
+**Q14b: "Mỗi client có key RSA riêng không? Hay tất cả dùng chung?"**
+- **Trả lời - HIỆN TẠI**:
+  - ❌ **Hiện tại: Tất cả clients dùng CHUNG 1 cặp RSA key**
+  - RSA key pair được tạo **1 lần** khi server khởi động
+  - Lưu vào: `public_key.txt` (public), `private_key.txt` (private)
+  - **Mỗi client kết nối** → nhận public key cũ → mã hóa bằng key chung này
+  - **Vấn đề**: Toàn bộ clients share cùng public/private key
+- **Trả lời - CẢI TIẾN ĐỀ XUẤT** (ECDH):
+  - ✅ Mỗi client connection → sinh unique session key
+  - Sử dụng **ECDH (Elliptic Curve Diffie-Hellman)**
+  - **Quy trình**:
+    ```
+    1. Server sinh ECDH key pair khi client connect
+    2. Client sinh ECDH key pair
+    3. Trao đổi public keys qua network
+    4. Compute shared secret (unique cho mỗi connection)
+    5. Derive AES key từ shared secret
+    6. Mã hóa/giải mã dữ liệu bằng AES key
+    ```
+  - **Lợi ích**:
+    - Mỗi client → unique key (không reuse)
+    - Perfect Forward Secrecy (past sessions safe)
+    - Performance tốt (~10x nhanh hơn RSA)
+    - Modern standard (TLS 1.3 dùng)
+- **Hiện tại chưa cải tiến**: Cơ hội tốt để thêm vào phase 2! 🚀
+- **Tham khảo**: Xem `KEY_MANAGEMENT_ANALYSIS.md` để biết chi tiết
+
 ---
 
 ### ❓ Câu hỏi trung bình
@@ -233,14 +260,28 @@
 - **Lesson**: Client không có private key → server không thể gửi encrypted AES key mới
 
 **Q20: "Hybrid encryption có perfect forward secrecy (PFS) không?"**
-- **Trả lời**:
-  - Current: Không (nếu private key bị crack → tất cả sessions compromised)
-  - PFS implementation:
-    - Dùng Diffie-Hellman key exchange
-    - Mỗi session → key pair mới
-    - Attacker crack → chỉ 1 session compromise
-  - Trade-off: PFS = phức tạp + chậm
-  - Current: Acceptable for educational project
+- **Trả lời - HIỆN TẠI**:
+  - ❌ Không có PFS
+  - Nếu private key RSA bị crack → tất cả sessions compromised (tất cả dùng chung key)
+  - Không có key rotation
+- **Trả lời - CẢI TIẾN ĐỀ XUẤT** (ECDH):
+  - ✅ **Có PFS với ECDH**
+  - **Quy trình**:
+    ```
+    1. Mỗi client connect → sinh unique ECDH key pair
+    2. Mỗi connection → compute unique shared secret
+    3. Shared secret destroy sau disconnect
+    4. ⭐ Attacker crack → chỉ 1 connection compromise
+    5. ⭐ Past & future connections vẫn safe
+    ```
+  - **So sánh**:
+    | | Hiện tại (RSA) | ECDH |
+    |---|---|---|
+    | Per-client key | ❌ | ✅ |
+    | PFS | ❌ | ✅ |
+    | Performance | ⭐⭐ | ⭐⭐⭐⭐ |
+    | Complexity | ⭐⭐ | ⭐⭐⭐ |
+  - **Implementation**: Xem `KEY_MANAGEMENT_ANALYSIS.md` 🔐
 
 **Q21: "AES-256-CBC vs AES-256-GCM? Tại sao chọn CBC?"**
 - **Trả lời**:

@@ -117,6 +117,25 @@ public class KeyManager {
     }
 
     /**
+     * Sinh RSA key pair EPHEMERAL cho mỗi client (KHÔNG lưu vào file)
+     *
+     * @return RSAKeyPair riêng cho client này
+     *
+     * IMPROVEMENT: Mỗi client connection → unique key pair ✓ Key isolation (1
+     * key leak ≠ tất cả leak) ✓ Better security than shared key
+     */
+    public static RSAKeyPair generateEphemeralClientKeyPair() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(RSA_KEY_SIZE);
+        KeyPair keyPair = keyGen.generateKeyPair();
+
+        String publicKeyStr = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        String privateKeyStr = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
+
+        return new RSAKeyPair(publicKeyStr, privateKeyStr);
+    }
+
+    /**
      * Lớp lưu trữ cặp public/private key dưới dạng Base64
      */
     public static class RSAKeyPair {

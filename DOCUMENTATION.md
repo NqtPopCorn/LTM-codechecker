@@ -871,21 +871,70 @@ out.println(encryptedResponse);     // Dữ liệu mới (AES cùng key)
 
 ## 📐 Security Analysis
 
+### 🚨 Vấn Đề Hiện Tại: Shared RSA Key (Critical)
+
+**Phát hiện:** Tất cả clients dùng **CHUNG 1 cặp RSA key pair** 
+
+```
+❌ HIỆN TẠI:
+┌──────────────────────────────┐
+│ Client 1  Client 2  Client 3 │
+└────┬──────────┬──────────┬───┘
+     └──────────┼──────────┘
+         (All share)
+            │
+            ▼
+    ┌──────────────────┐
+    │ 1 RSA Key Pair   │
+    │ (Shared forever) │
+    └──────────────────┘
+    
+Vấn đề:
+1. Không có key isolation → 1 key leak = tất cả compromise
+2. Không có PFS → nếu private key bị leak (5 năm sau) → tất cả past sessions exposed
+3. Reuse key nhiều lần → dễ bị attack
+```
+
+**Giải pháp (Đề xuất):** Sử dụng **ECDH** để sinh unique session key cho mỗi client
+
+```
+✅ CẢI TIẾN (ECDH):
+┌──────────────────────────────┐
+│ Client 1  Client 2  Client 3 │
+└────┬──────────┬──────────┬───┘
+     │          │         │
+     ▼          ▼         ▼
+ KEY 1      KEY 2      KEY 3
+(Unique)   (Unique)   (Unique)
+
+Lợi ích:
+1. Key isolation → mỗi client unique key
+2. PFS → chỉ 1 connection bị compromise
+3. Modern standard → TLS 1.3 dùng
+```
+
+**Xem chi tiết:** [KEY_MANAGEMENT_ANALYSIS.md](KEY_MANAGEMENT_ANALYSIS.md)
+
+---
+
 ### Threat Model & Mitigations
 
-| Threat | Impact | Mitigation |
-|--------|--------|-----------|
-| **Wiretap** | Attacker sees encrypted data | RSA 2048 + AES 256 |
-| **Replay Attack** | Reuse old requests | Random session key per request |
-| **Man-in-the-Middle** | Intercept key exchange | Public key sent plaintext (only demo) |
-| **Brute Force** | Crack encryption | 2048-bit RSA, 256-bit AES |
+| Threat | Impact | Mitigation (Hiện) | Cải tiến |
+|--------|--------|-----------|---------|
+| **Wiretap** | Attacker sees encrypted data | RSA 2048 + AES 256 | ✓ Sufficient |
+| **Replay Attack** | Reuse old requests | Random session key per request | ✓ Sufficient |
+| **Key Leak** | All sessions exposed | Shared key (❌ Risk) | **ECDH per-client (✅)** |
+| **Man-in-the-Middle** | Intercept key exchange | Public key sent plaintext | HTTPS + cert pinning |
+| **Brute Force** | Crack encryption | 2048-bit RSA, 256-bit AES | ✓ Sufficient |
+| **PFS** | Old sessions exposed if key leaks | None (❌) | **ECDH (✅)** |
 
 ### Cải Thiện Bảo Mật (Future)
 
-1. **Certificate Pinning** - Xác thực server identity
-2. **HMAC** - Message authentication
-3. **Perfect Forward Secrecy** - Ephemeral keys
+1. **ECDH** - Per-client session key + Perfect Forward Secrecy ⭐ Priority
+2. **Certificate Pinning** - Xác thực server identity
+3. **HMAC/GCM** - Message authentication
 4. **TLS 1.3** - Thay thế TCP socket
+5. **Key Rotation** - Periodic key refresh
 
 ---
 

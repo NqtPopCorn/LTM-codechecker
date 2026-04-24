@@ -11,24 +11,18 @@ public class ServerMain {
     // Định nghĩa cổng giao tiếp cho Server. Phải khớp với cổng mà ClientService đang gọi tới.
     private static final int PORT = 5000;
 
-    // Lưu RSA key pairs cho mã hóa lai
-    private static KeyManager.RSAKeyPair rsaKeyPair;
-
     public static void main(String[] args) {
         System.out.println("=================================================");
         System.out.println("   SERVER KIỂM TRA VÀ THỰC THI CODE   ");
         System.out.println("=================================================");
         System.out.println("Đang khởi động hệ thống...");
 
-        // Khởi tạo RSA keys cho mã hóa lai
-        try {
-            rsaKeyPair = KeyManager.initializeKeys();
-            System.out.println("[INFO] RSA keys đã khởi tạo thành công!\n");
-        } catch (Exception e) {
-            System.err.println("[-] Lỗi khởi tạo RSA keys: " + e.getMessage());
-            e.printStackTrace();
-            return;
-        }
+        // =====================================================
+        // IMPROVEMENT: Per-Client Key Pair
+        // =====================================================
+        System.out.println("[INFO] Mode: Per-Client Key Pair (ENABLED)");
+        System.out.println("[INFO] Mỗi client connection → sinh unique RSA key pair");
+        System.out.println("[INFO] ✓ Key isolation, ✓ Better security\n");
 
         // Khởi tạo ServerSocket
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
@@ -54,8 +48,11 @@ public class ServerMain {
                 int clientPort = clientSocket.getPort();
                 System.out.println("[+] Phát hiện Client mới kết nối từ: " + clientIP + ":" + clientPort);
 
+                // =====================================================
+                // IMPROVEMENT: Mỗi ClientHandler sinh RSA key pair riêng
+                // =====================================================
                 // Multithread: Giao socket cho ClientHandler, MainThread tiếp tục đón client khác
-                ClientHandler clientHandler = new ClientHandler(clientSocket, rsaKeyPair);
+                ClientHandler clientHandler = new ClientHandler(clientSocket);
                 clientHandler.start();
             }
 

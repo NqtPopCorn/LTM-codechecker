@@ -19,14 +19,37 @@ public class ClientHandler extends Thread {
     private String publicKeyForClient;
     private String privateKeyForServer;
 
-    public ClientHandler(Socket socket, KeyManager.RSAKeyPair rsaKeyPair) {
+    /**
+     * Constructor: Sinh RSA key pair RIÊNG cho client này (IMPROVEMENT)
+     *
+     * @param socket: Socket connection từ client
+     *
+     * ✓ BEFORE: Received shared rsaKeyPair từ ServerMain → Tất cả clients dùng
+     * chung key
+     *
+     * ✓ AFTER: Generate ephemeral per-client key pair → Mỗi client có unique
+     * key → Better security & key isolation
+     */
+    public ClientHandler(Socket socket) {
         this.socket = socket;
         this.gson = new Gson();
-        this.publicKeyForClient = rsaKeyPair.publicKey;
-        this.privateKeyForServer = rsaKeyPair.privateKey;
-        // Khởi tạo HybridCryptoManager với cả public và private key
-        this.hybridCryptoManager = new HybridCryptoManager(publicKeyForClient, privateKeyForServer);
         this.clientIPPrefix = "[" + socket.getInetAddress().getHostAddress() + ":" + socket.getPort() + "] ";
+
+        try {
+            // ✓ IMPROVEMENT: Generate unique key pair for this client
+            KeyManager.RSAKeyPair ephemeralKeyPair = KeyManager.generateEphemeralClientKeyPair();
+            this.publicKeyForClient = ephemeralKeyPair.publicKey;
+            this.privateKeyForServer = ephemeralKeyPair.privateKey;
+
+            // Khởi tạo HybridCryptoManager với cả public và private key riêng
+            this.hybridCryptoManager = new HybridCryptoManager(publicKeyForClient, privateKeyForServer);
+
+            System.out.println(clientIPPrefix + "[✓] RSA key pair riêng được sinh cho client này");
+
+        } catch (Exception e) {
+            System.err.println(clientIPPrefix + "[ERROR] Lỗi sinh key pair: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void logInfo(String message) {
@@ -135,6 +158,8 @@ public class ClientHandler extends Thread {
         } finally {
             try {
                 socket.close();
+                // ✓ IMPROVEMENT: Ephemeral key cleanup
+                logInfo("Client disconnected. RSA key pair được destroy (garbage collected)");
             } catch (Exception e) {
             }
         }
